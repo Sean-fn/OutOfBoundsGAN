@@ -136,6 +136,14 @@ def main():
             # Generate a batch of images
             gen_parts = generator(masked_imgs)
 
+            # ### Check if shapes match###
+            # if gen_parts.shape != masked_parts.shape:
+            #     print("Error: Shapes do not match!")
+            #     print(f"gen_parts shape: {gen_parts.shape}")
+            #     print(f"masked_parts shape: {masked_parts.shape}")
+            #     raise ValueError("Tensor shapes do not match for pixelwise loss calculation")
+            # ### Check if shapes match###
+
             # Adversarial and pixelwise loss
             g_adv = adversarial_loss(discriminator(gen_parts), valid)
             g_pixel = pixelwise_loss(gen_parts, masked_parts)
