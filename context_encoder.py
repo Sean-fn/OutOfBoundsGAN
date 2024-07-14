@@ -30,7 +30,7 @@ parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of firs
 parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
 parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space")
 parser.add_argument("--img_size", type=int, default=128, help="size of each image dimension")
-parser.add_argument("--mask_size", type=int, default=64, help="size of random mask")
+parser.add_argument("--mask_size", type=int, default=128, help="size of random mask")
 parser.add_argument("--channels", type=int, default=3, help="number of image channels")
 parser.add_argument("--sample_interval", type=int, default=100, help="interval between image sampling")
 opt = parser.parse_args()
@@ -53,11 +53,9 @@ def main():
             torch.nn.init.constant_(m.bias.data, 0.0)
 
 
-    # Loss function
     adversarial_loss = torch.nn.MSELoss()
     pixelwise_loss = torch.nn.L1Loss()
 
-    # Initialize generator and discriminator
     generator = Generator(channels=opt.channels)
     discriminator = Discriminator(channels=opt.channels)
 
@@ -101,13 +99,16 @@ def main():
         samples, masked_samples, i = next(iter(test_dataloader))
         samples = Variable(samples.type(Tensor))
         masked_samples = Variable(masked_samples.type(Tensor))
-        i = i[0].item()  # Upper-left coordinate of mask
+        # i = i[0].item()  # Upper-left coordinate of mask
+        # TODO: make i a variable passed to the model
+        i = 32
+        center_mask = opt.mask_size // 2 
         # Generate inpainted image
         gen_mask = generator(masked_samples)
         filled_samples = masked_samples.clone()
-        filled_samples[:, :, i : i + opt.mask_size, i : i + opt.mask_size] = gen_mask
+        gen_mask[:, :, i:i+center_mask, i:i+center_mask] = filled_samples[:, :, i:i+center_mask, i:i+center_mask]
         # Save sample
-        sample = torch.cat((masked_samples.data, filled_samples.data, samples.data), -2)
+        sample = torch.cat((masked_samples, gen_mask, samples), -2)
         save_image(sample, "images/%d.png" % batches_done, nrow=6, normalize=True)
 
 

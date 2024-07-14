@@ -4,7 +4,7 @@ import os
 import numpy as np
 
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import torchvision.transforms as transforms
 
@@ -30,13 +30,38 @@ class ImageDataset(Dataset):
 
     def apply_center_mask(self, img):
         """Mask center part of image(for face generation)"""
-        # Get upper-left pixel coordinate
         i = (self.img_size - self.mask_size) // 2
         masked_img = img.clone()
         masked_img[:, i : i + self.mask_size, i : i + self.mask_size] = 1
 
         return masked_img, i
 
+    def apply_external_random_mask(self, img):
+        """Randomly masks the external part of the image"""
+        mask = torch.ones_like(img)
+        
+        y1, x1 = np.random.randint(0, self.img_size - self.mask_size, 2)
+        y2, x2 = y1 + self.mask_size, x1 + self.mask_size
+        
+        mask[:, y1:y2, x1:x2] = 0
+        
+        masked_img = img * (1 - mask) + mask
+        
+        masked_part = img * mask
+        return masked_img, masked_part
+    
+    def apply_external_center_mask(self, img):
+        """Masks the external part of the image, keeping the center visible"""
+        mask = torch.ones_like(img)
+        
+        i = (self.img_size - self.mask_size) // 2
+        
+        mask[:, i:i+self.mask_size, i:i+self.mask_size] = 0
+        
+        masked_img = img * (1 - mask) + mask
+        
+        return masked_img, i
+    
     def apply_frame_mask(self, img):
         """Mask edge part of image(for frame generation)"""
         mask = torch.ones_like(img)
@@ -44,7 +69,6 @@ class ImageDataset(Dataset):
         mask[:, i : i + self.mask_size, i : i + self.mask_size] = 0
         
         masked_img = img * (1 - mask) + mask
-        # frame = img * mask
         
         return masked_img, i
 
@@ -53,19 +77,15 @@ class ImageDataset(Dataset):
         img = Image.open(self.files[index % len(self.files)])
         img = self.transform(img)
         if self.mode == "train":
-            # For training data perform random mask
-            masked_img, aux = self.apply_random_mask(img)
+            masked_img, aux = self.apply_external_random_mask(img)
         else:
-            # For test data mask the center of the image
-            masked_img, aux = self.apply_frame_mask(img)
-            # masked_img, aux = self.apply_center_mask(img)
+            masked_img, aux = self.apply_external_center_mask(img)
 
         return img, masked_img, aux
 
     def __len__(self):
         return len(self.files)
 
-### Show the samples ###
 #     def visualize_samples(self, num_samples=5, save_dir='./'):
 #         os.makedirs(save_dir, exist_ok=True)
 #         for i in range(num_samples):
@@ -88,9 +108,19 @@ class ImageDataset(Dataset):
 #         print(f"Save to: {save_dir}")
 
 # if __name__ == "__main__":
-#     dataset = ImageDataset("data/img_align_celeba", transforms_=[
+#     transforms_ = [
 #         transforms.Resize((128, 128)),
 #         transforms.ToTensor(),
-#     ])
+#     ]
+
+#     dataset = ImageDataset("data/img_align_celeba", transforms_=transforms_)
     
-#     dataset.visualize_samples(save_dir='./')
+#     dataset.visualize_samples(save_dir='./samples')
+
+#     dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+
+#     for i, (imgs, masked_imgs, aux) in enumerate(dataloader):
+#         print("Images shape:", imgs.shape)
+#         print("Masked images shape:", masked_imgs.shape)
+#         print("Aux shape:", aux.shape)
+#         break

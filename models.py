@@ -31,6 +31,7 @@ class Generator(nn.Module):
             *upsample(4000, 512),
             *upsample(512, 256),
             *upsample(256, 128),
+            *upsample(128, 128),
             *upsample(128, 64),
             nn.Conv2d(64, channels, 3, 1, 1),
             nn.Tanh()
