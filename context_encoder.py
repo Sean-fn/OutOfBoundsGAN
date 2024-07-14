@@ -32,9 +32,9 @@ parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality 
 parser.add_argument("--img_size", type=int, default=128, help="size of each image dimension")
 parser.add_argument("--mask_size", type=int, default=64, help="size of random mask")
 parser.add_argument("--channels", type=int, default=3, help="number of image channels")
-parser.add_argument("--sample_interval", type=int, default=500, help="interval between image sampling")
+parser.add_argument("--sample_interval", type=int, default=100, help="interval between image sampling")
 opt = parser.parse_args()
-print(opt)
+
 
 cuda = True if torch.cuda.is_available() else False
 
@@ -119,13 +119,13 @@ def main():
         for i, (imgs, masked_imgs, masked_parts) in enumerate(dataloader):
 
             # Adversarial ground truths
-            valid = Variable(Tensor(imgs.shape[0], *patch).fill_(1.0), requires_grad=False)
-            fake = Variable(Tensor(imgs.shape[0], *patch).fill_(0.0), requires_grad=False)
+            valid = torch.ones(imgs.shape[0], *patch, requires_grad=False).type(Tensor)
+            fake = torch.zeros(imgs.shape[0], *patch, requires_grad=False).type(Tensor)
 
             # Configure input
-            imgs = Variable(imgs.type(Tensor))
-            masked_imgs = Variable(masked_imgs.type(Tensor))
-            masked_parts = Variable(masked_parts.type(Tensor))
+            imgs = imgs.type(Tensor).requires_grad_(True)
+            masked_imgs = masked_imgs.type(Tensor).requires_grad_(True)
+            masked_parts = masked_parts.type(Tensor).requires_grad_(True)
 
             # -----------------
             #  Train Generator
@@ -178,4 +178,5 @@ def main():
                 save_sample(batches_done)
 
 if __name__ == '__main__':
+    print(opt)
     main()
