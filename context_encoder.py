@@ -1,183 +1,92 @@
-import argparse
-import os
-import numpy as np
-import math
-
-import torchvision.transforms as transforms
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+from torchvision import transforms
 from torchvision.utils import save_image
 from PIL import Image
 
-from torch.utils.data import DataLoader
-from torchvision import datasets
-from torch.autograd import Variable
+from datasets import ImageDataset
+from models import Generator, Discriminator
 
-from datasets import *
-from models import *
-
-import torch.nn as nn
-import torch.nn.functional as F
-import torch
-
-os.makedirs("images", exist_ok=True)
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--n_epochs", type=int, default=200, help="number of epochs of training")
-parser.add_argument("--batch_size", type=int, default=8, help="size of the batches")
-parser.add_argument("--dataset_name", type=str, default="img_align_celeba", help="name of the dataset")
-parser.add_argument("--lr", type=float, default=0.0002, help="adam: learning rate")
-parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
-parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
-parser.add_argument("--n_cpu", type=int, default=4, help="number of cpu threads to use during batch generation")
-parser.add_argument("--latent_dim", type=int, default=100, help="dimensionality of the latent space")
-parser.add_argument("--img_size", type=int, default=128, help="size of each image dimension")
-parser.add_argument("--mask_size", type=int, default=128, help="size of random mask")
-parser.add_argument("--channels", type=int, default=3, help="number of image channels")
-parser.add_argument("--sample_interval", type=int, default=100, help="interval between image sampling")
-opt = parser.parse_args()
-
-
-cuda = True if torch.cuda.is_available() else False
-
-def main():
-    # Calculate output of image discriminator (PatchGAN)
-    patch_h, patch_w = int(opt.mask_size / 2 ** 3), int(opt.mask_size / 2 ** 3)
-    patch = (1, patch_h, patch_w)
-
-
-    def weights_init_normal(m):
-        classname = m.__class__.__name__
-        if classname.find("Conv") != -1:
-            torch.nn.init.normal_(m.weight.data, 0.0, 0.02)
-        elif classname.find("BatchNorm2d") != -1:
-            torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
-            torch.nn.init.constant_(m.bias.data, 0.0)
-
-
-    adversarial_loss = torch.nn.MSELoss()
-    pixelwise_loss = torch.nn.L1Loss()
-
-    generator = Generator(channels=opt.channels)
-    discriminator = Discriminator(channels=opt.channels)
-
-    if cuda:
-        generator.cuda()
-        discriminator.cuda()
-        adversarial_loss.cuda()
-        pixelwise_loss.cuda()
-
-    # Initialize weights
-    generator.apply(weights_init_normal)
-    discriminator.apply(weights_init_normal)
-
-    # Dataset loader
-    transforms_ = [
-        transforms.Resize((opt.img_size, opt.img_size), Image.BICUBIC),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-    ]
-    dataloader = DataLoader(
-        ImageDataset("data/%s" % opt.dataset_name, transforms_=transforms_),
-        batch_size=opt.batch_size,
-        shuffle=True,
-        num_workers=opt.n_cpu,
-    )
-    test_dataloader = DataLoader(
-        ImageDataset("data/%s" % opt.dataset_name, transforms_=transforms_, mode="val"),
-        batch_size=12,
-        shuffle=True,
-        num_workers=1,
-    )
-
-    # Optimizers
-    optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-    optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.lr, betas=(opt.b1, opt.b2))
-
-    Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-
-
-    def save_sample(batches_done):
-        samples, masked_samples, i = next(iter(test_dataloader))
-        samples = Variable(samples.type(Tensor))
-        masked_samples = Variable(masked_samples.type(Tensor))
-        # i = i[0].item()  # Upper-left coordinate of mask
-        # TODO: make i a variable passed to the model
+class GANTrainer:
+    def __init__(self, config):
+        self.config = config
+        self.generator = Generator(channels=config.opt.channels)
+        self.discriminator = Discriminator(channels=config.opt.channels)
+        self.adversarial_loss = nn.MSELoss()
+        self.pixelwise_loss = nn.L1Loss()
+        
+        if config.cuda:
+            self.generator.cuda()
+            self.discriminator.cuda()
+            self.adversarial_loss.cuda()
+            self.pixelwise_loss.cuda()
+        
+        self.optimizer_G = torch.optim.Adam(self.generator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
+        self.optimizer_D = torch.optim.Adam(self.discriminator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
+        
+        self.dataloader = self.get_dataloader()
+        self.test_dataloader = self.get_dataloader(mode="val")
+        
+    def get_dataloader(self, mode="train"):
+        transforms_ = [
+            transforms.Resize((self.config.opt.img_size, self.config.opt.img_size), Image.BICUBIC),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ]
+        dataset = ImageDataset(f"data/{self.config.opt.dataset_name}", transforms_=transforms_, mode=mode)
+        dataloader = DataLoader(
+            dataset,
+            batch_size=self.config.opt.batch_size if mode == "train" else 12,
+            shuffle=True,
+            num_workers=self.config.opt.n_cpu if mode == "train" else 1,
+        )
+        return dataloader
+    
+    def save_sample(self, batches_done):
+        samples, masked_samples, i = next(iter(self.test_dataloader))
+        samples = samples.type(self.config.Tensor)
+        masked_samples = masked_samples.type(self.config.Tensor)
         i = 32
-        center_mask = opt.mask_size // 2 
-        # Generate inpainted image
-        gen_mask = generator(masked_samples)
+        center_mask = self.config.opt.mask_size // 2 
+        gen_mask = self.generator(masked_samples)
         filled_samples = masked_samples.clone()
         gen_mask[:, :, i:i+center_mask, i:i+center_mask] = filled_samples[:, :, i:i+center_mask, i:i+center_mask]
-        # Save sample
         sample = torch.cat((masked_samples, gen_mask, samples), -2)
-        save_image(sample, "images/%d.png" % batches_done, nrow=6, normalize=True)
+        save_image(sample, f"images/{batches_done}.png", nrow=6, normalize=True)
+    
+    def train(self):
+        for epoch in range(self.config.opt.n_epochs):
+            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader):
+                valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
+                fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
 
+                imgs = imgs.type(self.config.Tensor)
+                masked_imgs = masked_imgs.type(self.config.Tensor)
+                masked_parts = masked_parts.type(self.config.Tensor)
 
-    # ----------
-    #  Training
-    # ----------
+                # Train Generator
+                self.optimizer_G.zero_grad()
+                gen_parts = self.generator(masked_imgs)
+                g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
+                g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
+                g_loss = 0.001 * g_adv + 0.999 * g_pixel
+                g_loss.backward()
+                self.optimizer_G.step()
 
-    for epoch in range(opt.n_epochs):
-        for i, (imgs, masked_imgs, masked_parts) in enumerate(dataloader):
+                # Train Discriminator
+                self.optimizer_D.zero_grad()
+                real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
+                fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
+                d_loss = 0.5 * (real_loss + fake_loss)
+                d_loss.backward()
+                self.optimizer_D.step()
 
-            # Adversarial ground truths
-            valid = torch.ones(imgs.shape[0], *patch, requires_grad=False).type(Tensor)
-            fake = torch.zeros(imgs.shape[0], *patch, requires_grad=False).type(Tensor)
+                print(
+                    f"[Epoch {epoch}/{self.config.opt.n_epochs}] [Batch {i}/{len(self.dataloader)}] "
+                    f"[D loss: {d_loss.item()}] [G adv: {g_adv.item()}, pixel: {g_pixel.item()}]"
+                )
 
-            # Configure input
-            imgs = imgs.type(Tensor).requires_grad_(True)
-            masked_imgs = masked_imgs.type(Tensor).requires_grad_(True)
-            masked_parts = masked_parts.type(Tensor).requires_grad_(True)
-
-            # -----------------
-            #  Train Generator
-            # -----------------
-
-            optimizer_G.zero_grad()
-
-            # Generate a batch of images
-            gen_parts = generator(masked_imgs)
-
-            # ### Check if shapes match###
-            # if gen_parts.shape != masked_parts.shape:
-            #     print("Error: Shapes do not match!")
-            #     print(f"gen_parts shape: {gen_parts.shape}")
-            #     print(f"masked_parts shape: {masked_parts.shape}")
-            #     raise ValueError("Tensor shapes do not match for pixelwise loss calculation")
-            # ### Check if shapes match###
-
-            # Adversarial and pixelwise loss
-            g_adv = adversarial_loss(discriminator(gen_parts), valid)
-            g_pixel = pixelwise_loss(gen_parts, masked_parts)
-            # Total loss
-            g_loss = 0.001 * g_adv + 0.999 * g_pixel
-
-            g_loss.backward()
-            optimizer_G.step()
-
-            # ---------------------
-            #  Train Discriminator
-            # ---------------------
-
-            optimizer_D.zero_grad()
-
-            # Measure discriminator's ability to classify real from generated samples
-            real_loss = adversarial_loss(discriminator(masked_parts), valid)
-            fake_loss = adversarial_loss(discriminator(gen_parts.detach()), fake)
-            d_loss = 0.5 * (real_loss + fake_loss)
-
-            d_loss.backward()
-            optimizer_D.step()
-
-            print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G adv: %f, pixel: %f]"
-                % (epoch, opt.n_epochs, i, len(dataloader), d_loss.item(), g_adv.item(), g_pixel.item())
-            )
-
-            # Generate sample at sample interval
-            batches_done = epoch * len(dataloader) + i
-            if batches_done % opt.sample_interval == 0:
-                save_sample(batches_done)
-
-if __name__ == '__main__':
-    print(opt)
-    main()
+                batches_done = epoch * len(self.dataloader) + i
+                if batches_done % self.config.opt.sample_interval == 0:
+                    self.save_sample(batches_done)
