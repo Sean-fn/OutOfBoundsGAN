@@ -1,3 +1,6 @@
+import datetime
+import os
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -16,14 +19,14 @@ class GANTrainer:
         self.adversarial_loss = nn.MSELoss()
         self.pixelwise_loss = nn.L1Loss()
         
+        self.optimizer_G = torch.optim.Adam(self.generator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
+        self.optimizer_D = torch.optim.Adam(self.discriminator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
+
         if config.cuda:
             self.generator.cuda()
             self.discriminator.cuda()
             self.adversarial_loss.cuda()
             self.pixelwise_loss.cuda()
-        
-        self.optimizer_G = torch.optim.Adam(self.generator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
-        self.optimizer_D = torch.optim.Adam(self.discriminator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
         
         self.dataloader = self.get_dataloader()
         self.test_dataloader = self.get_dataloader(mode="val")
@@ -37,23 +40,28 @@ class GANTrainer:
         dataset = ImageDataset(f"data/{self.config.opt.dataset_name}", transforms_=transforms_, mode=mode)
         dataloader = DataLoader(
             dataset,
-            batch_size=self.config.opt.batch_size if mode == "train" else 12,
+            self.config.opt.batch_size if mode == "train" else 12,
             shuffle=True,
             num_workers=self.config.opt.n_cpu if mode == "train" else 1,
         )
         return dataloader
     
     def save_sample(self, batches_done):
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_dir = os.path.join("images", timestamp)
+        os.makedirs(save_dir, exist_ok=True)
+
         samples, masked_samples, i = next(iter(self.test_dataloader))
         samples = samples.type(self.config.Tensor)
         masked_samples = masked_samples.type(self.config.Tensor)
-        i = 32
+        i = 32      # TODO: make i a variable passed to the model
         center_mask = self.config.opt.mask_size // 2 
-        gen_mask = self.generator(masked_samples)
-        filled_samples = masked_samples.clone()
-        gen_mask[:, :, i:i+center_mask, i:i+center_mask] = filled_samples[:, :, i:i+center_mask, i:i+center_mask]
-        sample = torch.cat((masked_samples, gen_mask, samples), -2)
-        save_image(sample, f"images/{batches_done}.png", nrow=6, normalize=True)
+        gen_fram = self.generator(masked_samples)
+        center_part = masked_samples.clone()
+        gen_fram[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
+        sample = torch.cat((masked_samples, gen_fram, samples), -2)
+        save_path = os.path.join(save_dir, f"{batches_done}.png")
+        save_image(sample, save_path, nrow=6, normalize=True)
     
     def train(self):
         for epoch in range(self.config.opt.n_epochs):
