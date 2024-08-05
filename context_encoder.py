@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.utils import save_image
 from PIL import Image
+import numpy as np
 
 from datasets import ImageDataset
 from models import Generator, Discriminator
@@ -30,6 +31,11 @@ class GANTrainer:
         
         self.dataloader = self.get_dataloader()
         self.test_dataloader = self.get_dataloader(mode="val")
+
+        self.epochs_list = []
+        self.d_losses = []
+        self.g_adv_losses = []
+        self.g_pixel_losses = []
         
     def get_dataloader(self, mode="train"):
         transforms_ = [
@@ -47,8 +53,7 @@ class GANTrainer:
         return dataloader
     
     def save_sample(self, batches_done):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.join("images", timestamp)
+        save_dir = 'images'
         os.makedirs(save_dir, exist_ok=True)
 
         samples, masked_samples, i = next(iter(self.test_dataloader))
@@ -63,6 +68,16 @@ class GANTrainer:
         save_path = os.path.join(save_dir, f"{batches_done}.png")
         save_image(sample, save_path, nrow=6, normalize=True)
     
+    def save_training_data(self):
+        data = {
+            'epochs': np.array(self.epochs_list),
+            'd_losses': np.array(self.d_losses),
+            'g_adv_losses': np.array(self.g_adv_losses),
+            'g_pixel_losses': np.array(self.g_pixel_losses)
+        }
+        os.makedirs('./config_data', exist_ok=True)
+        np.save('./config_data/training_data.npy', data)
+
     def train(self):
         for epoch in range(self.config.opt.n_epochs):
             for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader):
@@ -95,6 +110,14 @@ class GANTrainer:
                     f"[D loss: {d_loss.item()}] [G adv: {g_adv.item()}, pixel: {g_pixel.item()}]"
                 )
 
+                # Save loss data into arrays
+                self.epochs_list.append(epoch + i / len(self.dataloader))
+                self.d_losses.append(d_loss.item())
+                self.g_adv_losses.append(g_adv.item())
+                self.g_pixel_losses.append(g_pixel.item())
+
+                # Save after an amount of batches
                 batches_done = epoch * len(self.dataloader) + i
                 if batches_done % self.config.opt.sample_interval == 0:
                     self.save_sample(batches_done)
+                    self.save_training_data()
