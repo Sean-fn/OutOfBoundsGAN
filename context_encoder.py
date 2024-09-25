@@ -131,36 +131,29 @@ class GANTrainer:
         weights_dir = 'weights'
         os.makedirs(weights_dir, exist_ok=True)
     
-        # make it pickable
-        # Save latest weights
+        if os.path.exists(os.path.join(weights_dir, 'generator_latest.pth')):
+            os.rename(os.path.join(weights_dir, 'generator_latest.pth'), os.path.join(weights_dir, f'generator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
+            os.rename(os.path.join(weights_dir, 'discriminator_latest.pth'), os.path.join(weights_dir, f'discriminator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
         torch.save(self.generator.state_dict(), os.path.join(weights_dir, 'generator_latest.pth'))
         torch.save(self.discriminator.state_dict(), os.path.join(weights_dir, 'discriminator_latest.pth'))
-    
-        # Save epoch-specific weights
-        torch.save(self.generator.state_dict(), os.path.join(weights_dir, f'generator_epoch_{epoch}.pth'))
-        torch.save(self.discriminator.state_dict(), os.path.join(weights_dir, f'discriminator_epoch_{epoch}.pth'))
 
         print(f"Saved model weights for epoch {epoch}")
 
     def train(self):
-        if self.config.opt.resume_training:
-            generator_path = os.path.join('weights', 'generator_latest.pth')
-            discriminator_path = os.path.join('weights', 'discriminator_latest.pth')
-        
-            if os.path.exists(generator_path):
-                self.generator.load_state_dict(torch.load(generator_path))
-                print("Loaded pre-trained generator weights")
-            else:
-                print("No pre-trained generator weights found. Starting from scratch.")
+        resume_num = self.config.opt.resume_num
+        if resume_num is not None:
+            generator_path = os.path.join('weights', f'generator_{resume_num}.pth')
+            discriminator_path = os.path.join('weights', f'discriminator_{resume_num}.pth')
         
             if os.path.exists(discriminator_path):
                 self.discriminator.load_state_dict(torch.load(discriminator_path))
-                print("Loaded pre-trained discriminator weights")
+                self.generator.load_state_dict(torch.load(generator_path))
+                print("Loaded pre-trained weights")
             else:
-                print("No pre-trained discriminator weights found. Starting from scratch.")
+                print("No pre-trained weights found. Starting from scratch.")
 
         for epoch in range(self.config.opt.n_epochs):
-            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader):
+            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(resume_num)):
                 valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
                 fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
 
