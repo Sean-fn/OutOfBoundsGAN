@@ -1,4 +1,7 @@
 *_bak.py
+logs/
+images_archive
+weights
 
 
 *.json
@@ -11,7 +14,11 @@ data
 images
 saved_models
 samples
+runs
+face
+config_data
 
 venv
+
 
 __pycache__
