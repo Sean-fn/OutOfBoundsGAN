@@ -139,67 +139,59 @@ class GANTrainer:
 
         print(f"Saved model weights for epoch {epoch}")
 
-    def train(self):
-        resume_num = self.config.opt.resume_num
-        if resume_num is not None:
-            generator_path = os.path.join('weights', f'generator_{resume_num}.pth')
-            discriminator_path = os.path.join('weights', f'discriminator_{resume_num}.pth')
-        
-            if os.path.exists(discriminator_path):
-                self.discriminator.load_state_dict(torch.load(discriminator_path))
-                self.generator.load_state_dict(torch.load(generator_path))
-                print("Loaded pre-trained weights")
-            else:
-                resume_num = 0
-                print("Fetching the pre-trained weights, but nothing found. Starting from scratch.")
+    def train(self, epoch):
+        for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
+            valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
+            fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
 
-        for epoch in range(self.config.opt.n_epochs):
-            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
-                valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
-                fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
+            imgs = imgs.type(self.config.Tensor)
+            masked_imgs = masked_imgs.type(self.config.Tensor)
+            masked_parts = masked_parts.type(self.config.Tensor)
 
-                imgs = imgs.type(self.config.Tensor)
-                masked_imgs = masked_imgs.type(self.config.Tensor)
-                masked_parts = masked_parts.type(self.config.Tensor)
+            # Train Generator
+            self.optimizer_G.zero_grad()
+            gen_parts = self.generator(masked_imgs)
+            g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
+            g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
+            g_loss = 0.001 * g_adv + 0.999 * g_pixel
+            g_loss.backward()
+            self.optimizer_G.step()
 
-                # Train Generator
-                self.optimizer_G.zero_grad()
-                gen_parts = self.generator(masked_imgs)
-                g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
-                g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
-                g_loss = 0.001 * g_adv + 0.999 * g_pixel
-                g_loss.backward()
-                self.optimizer_G.step()
+            # Train Discriminator
+            self.optimizer_D.zero_grad()
+            real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
+            fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
+            d_loss = 0.5 * (real_loss + fake_loss)
+            d_loss.backward()
+            self.optimizer_D.step()
 
-                # Train Discriminator
-                self.optimizer_D.zero_grad()
-                real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
-                fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
-                d_loss = 0.5 * (real_loss + fake_loss)
-                d_loss.backward()
-                self.optimizer_D.step()
+            print(
+                f"[Epoch {epoch}/{self.config.opt.n_epochs}] [Batch {i}/{len(self.dataloader)}] "
+                f"[D loss: {d_loss.item()}] [G adv: {g_adv.item()}, pixel: {g_pixel.item()}]"
+            )
 
-                print(
-                    f"[Epoch {epoch}/{self.config.opt.n_epochs}] [Batch {i}/{len(self.dataloader)}] "
-                    f"[D loss: {d_loss.item()}] [G adv: {g_adv.item()}, pixel: {g_pixel.item()}]"
-                )
+            # Save loss data into arrays
+            # self.epochs_list.append(epoch + i / len(self.dataloader))
+            # self.d_losses.append(d_loss.item())
+            # self.g_adv_losses.append(g_adv.item())
+            # self.g_pixel_losses.append(g_pixel.item())
 
-                # Save loss data into arrays
-                # self.epochs_list.append(epoch + i / len(self.dataloader))
-                # self.d_losses.append(d_loss.item())
-                # self.g_adv_losses.append(g_adv.item())
-                # self.g_pixel_losses.append(g_pixel.item())
+            global_step = epoch * len(self.dataloader) + i
+            self.log_training_progress(epoch, i, imgs, masked_imgs, masked_parts, 
+                                        d_loss, g_adv, g_pixel, g_loss, global_step)
 
-                global_step = epoch * len(self.dataloader) + i
-                self.log_training_progress(epoch, i, imgs, masked_imgs, masked_parts, 
-                                           d_loss, g_adv, g_pixel, g_loss, global_step)
+            # Save after an amount of batches
+            batches_done = epoch * len(self.dataloader) + i
+            if batches_done % self.config.opt.sample_interval == 0:
+                self.save_sample(batches_done)
+                self.save_weights(batches_done)
+                # self.save_training_data()
 
-                # Save after an amount of batches
-                batches_done = epoch * len(self.dataloader) + i
-                if batches_done % self.config.opt.sample_interval == 0:
-                    self.save_sample(batches_done)
-                    self.save_weights(batches_done)
-                    # self.save_training_data()
-
-            self.log_epoch_end(epoch)
+        self.log_epoch_end(epoch)
+        observed_value = g_loss.item()
+        carbs.observe(ObservationInParam(
+            input=suggestion,
+            output=observed_value,
+            cost=epoch
+        ))
         self.writer.close()
