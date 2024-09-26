@@ -6,7 +6,7 @@ class Config:
         parser = argparse.ArgumentParser()
         # TODO: early stopping
         parser.add_argument("--n_epochs", type=int, default=200)
-        parser.add_argument("--batch_size", type=int, default=310)
+        parser.add_argument("--batch_size", type=int, default=320)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")
         parser.add_argument("--dataset_name", type=str, default="street")
         parser.add_argument("--lr", type=float, default=0.00009)
@@ -19,7 +19,9 @@ class Config:
         parser.add_argument("--channels", type=int, default=3)
         parser.add_argument("--sample_interval", type=int, default=100)
         parser.add_argument("--run_name", type=str, default="GAN_experiment")
-        parser.add_argument("--resume_num", type=str, default="10")
+        # TODO: resume training with one argument
+        parser.add_argument("--resume_num", type=str, default="latest")
+        parser.add_argument("--resume_start_num", type=int, default=200)
         self.opt = parser.parse_args()
         
         self.cuda = True if torch.cuda.is_available() else False

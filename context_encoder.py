@@ -130,7 +130,7 @@ class GANTrainer:
     def save_weights(self, epoch):
         weights_dir = 'weights'
         os.makedirs(weights_dir, exist_ok=True)
-    
+
         if os.path.exists(os.path.join(weights_dir, 'generator_latest.pth')):
             os.rename(os.path.join(weights_dir, 'generator_latest.pth'), os.path.join(weights_dir, f'generator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
             os.rename(os.path.join(weights_dir, 'discriminator_latest.pth'), os.path.join(weights_dir, f'discriminator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
@@ -150,10 +150,11 @@ class GANTrainer:
                 self.generator.load_state_dict(torch.load(generator_path))
                 print("Loaded pre-trained weights")
             else:
-                print("No pre-trained weights found. Starting from scratch.")
+                resume_num = 0
+                print("Fetching the pre-trained weights, but nothing found. Starting from scratch.")
 
         for epoch in range(self.config.opt.n_epochs):
-            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(resume_num)):
+            for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
                 valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
                 fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
 
