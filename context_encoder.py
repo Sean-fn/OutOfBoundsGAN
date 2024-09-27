@@ -139,7 +139,18 @@ class GANTrainer:
 
         print(f"Saved model weights for epoch {epoch}")
 
-    def train(self, epoch):
+    def train(self, epoch, carbs):
+        # Suggest new learning rate from CARBS
+        suggestion = carbs.suggest().suggestion
+        self.config.opt.lr = suggestion['lr']
+
+        # Update optimizer with new learning rate
+        for param_group in self.optimizer_G.param_groups:
+            param_group['lr'] = self.config.opt.lr
+        for param_group in self.optimizer_D.param_groups:
+            param_group['lr'] = self.config.opt.lr
+
+        print(f"Epoch {epoch}/{self.config.opt.n_epochs} - Adjusted Learning Rate: {self.config.opt.lr}")
         for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
             valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
             fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
