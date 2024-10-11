@@ -9,21 +9,60 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from PIL import Image
 import numpy as np
-from torch.utils.tensorboard import SummaryWriter
+from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
+from carbs import ObservationInParam
 
 from datasets import ImageDataset
 from models import Generator, Discriminator
 
 class GANTrainer:
-    def __init__(self, config):
+    def __init__(self, config, writer):
         self.config = config
         self.generator = Generator(channels=config.opt.channels)
         self.discriminator = Discriminator(channels=config.opt.channels)
         self.adversarial_loss = nn.MSELoss()
         self.pixelwise_loss = nn.L1Loss()
         
-        self.optimizer_G = torch.optim.Adam(self.generator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
-        self.optimizer_D = torch.optim.Adam(self.discriminator.parameters(), lr=config.opt.lr, betas=(config.opt.b1, config.opt.b2))
+        self.optimizer_G = torch.optim.Adam(
+            self.generator.parameters(), 
+            lr=config.opt.lr, 
+            betas=(config.opt.b1, config.opt.b2)
+        )
+        self.optimizer_D = torch.optim.Adam(
+            self.discriminator.parameters(), 
+            lr=config.opt.lr, 
+            betas=(config.opt.b1, config.opt.b2)
+        )
+
+        self.scheduler_G = CyclicLR(
+            self.optimizer_G, 
+            base_lr=config.opt.lr_min, 
+            max_lr=config.opt.lr_max,
+            step_size_up=config.opt.step_size_up,
+            mode='triangular'
+        )
+        self.scheduler_D = CyclicLR(
+            self.optimizer_D, 
+            base_lr=config.opt.lr_min, 
+            max_lr=config.opt.lr_max,
+            step_size_up=config.opt.step_size_up,
+            mode='triangular'
+        )
+
+        self.scheduler_G_plateau = ReduceLROnPlateau(
+            self.optimizer_G, 
+            mode='min', 
+            factor=config.opt.plateau_factor, 
+            patience=config.opt.plateau_patience, 
+            verbose=True
+        )
+        self.scheduler_D_plateau = ReduceLROnPlateau(
+            self.optimizer_D, 
+            mode='min', 
+            factor=config.opt.plateau_factor, 
+            patience=config.opt.plateau_patience, 
+            verbose=True
+        )
 
         if config.cuda:
             self.generator.cuda()
@@ -39,7 +78,7 @@ class GANTrainer:
         self.g_adv_losses = []
         self.g_pixel_losses = []
 
-        self.writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}/')#{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}')
+        self.writer = writer
         
     def get_dataloader(self, mode="train"):
         transforms_ = [
@@ -139,35 +178,73 @@ class GANTrainer:
 
         print(f"Saved model weights for epoch {epoch}")
 
-    def train(self, epoch):
+    def process_batch(self, imgs, masked_imgs, masked_parts):
+        imgs = imgs.type(self.config.Tensor)
+        masked_imgs = masked_imgs.type(self.config.Tensor)
+        masked_parts = masked_parts.type(self.config.Tensor)
+
+        batch_size = imgs.shape[0]
+        label_size = int(self.config.opt.mask_size / 2 ** 3)
+        valid = torch.ones(batch_size, 1, label_size, label_size).type(self.config.Tensor)
+        fake = torch.zeros(batch_size, 1, label_size, label_size).type(self.config.Tensor)
+
+        # Forward pass
+        gen_parts = self.generator(masked_imgs)
+
+        # Compute loss
+        g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
+        g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
+        g_loss = 0.001 * g_adv + 0.999 * g_pixel
+
+        # Discriminator loss
+        real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
+        fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
+        d_loss = 0.5 * (real_loss + fake_loss)
+
+        return gen_parts, g_adv, g_pixel, g_loss, d_loss
+
+    def train(self, epoch, carbs):
+        # Suggest new learning rate from CARBS
+        suggestion = carbs.suggest().suggestion
+        self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
+        self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
+        self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
+        self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
+        self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
+        self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
+
+        # Update optimizer with new learning rate
+        for param_group in self.optimizer_G.param_groups:
+            param_group['lr'] = self.config.opt.lr
+        for param_group in self.optimizer_D.param_groups:
+            param_group['lr'] = self.config.opt.lr
+    
+        print(f"Epoch {epoch}/{self.config.opt.n_epochs} - 調整後的超參數:")
+        print(f"  學習率 (lr): {self.config.opt.lr}")
+        print(f"  最小學習率 (lr_min): {self.config.opt.lr_min}")
+        print(f"  最大學習率 (lr_max): {self.config.opt.lr_max}")
+        print(f"  步進大小上升 (step_size_up): {self.config.opt.step_size_up}")
+        print(f"  降低因子 (plateau_factor): {self.config.opt.plateau_factor}")
+        print(f"  降低耐心 (plateau_patience): {self.config.opt.plateau_patience}")
+        
+        self.generator.train()
+        self.discriminator.train()
+        
+        # BUG: Dosen't resume training on the specific batch
         for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
-            valid = torch.ones(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
-            fake = torch.zeros(imgs.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
+            gen_parts, g_adv, g_pixel, g_loss, d_loss = self.process_batch(imgs, masked_imgs, masked_parts)
 
-            imgs = imgs.type(self.config.Tensor)
-            masked_imgs = masked_imgs.type(self.config.Tensor)
-            masked_parts = masked_parts.type(self.config.Tensor)
-
-            # Train Generator
             self.optimizer_G.zero_grad()
-            gen_parts = self.generator(masked_imgs)
-            g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
-            g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
-            g_loss = 0.001 * g_adv + 0.999 * g_pixel
             g_loss.backward()
             self.optimizer_G.step()
 
-            # Train Discriminator
             self.optimizer_D.zero_grad()
-            real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
-            fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
-            d_loss = 0.5 * (real_loss + fake_loss)
             d_loss.backward()
             self.optimizer_D.step()
 
             print(
                 f"[Epoch {epoch}/{self.config.opt.n_epochs}] [Batch {i}/{len(self.dataloader)}] "
-                f"[D loss: {d_loss.item()}] [G adv: {g_adv.item()}, pixel: {g_pixel.item()}]"
+                f"[D loss: {d_loss.item():.6f}] [G adv: {g_adv.item():.3f}, pixel: {g_pixel.item():.3f}]"
             )
 
             # Save loss data into arrays
@@ -176,22 +253,44 @@ class GANTrainer:
             # self.g_adv_losses.append(g_adv.item())
             # self.g_pixel_losses.append(g_pixel.item())
 
-            global_step = epoch * len(self.dataloader) + i
-            self.log_training_progress(epoch, i, imgs, masked_imgs, masked_parts, 
-                                        d_loss, g_adv, g_pixel, g_loss, global_step)
+            # global_step = epoch * len(self.dataloader) + i
+            # self.log_training_progress(epoch, i, imgs, masked_imgs, masked_parts, 
+            #                             d_loss, g_adv, g_pixel, g_loss, global_step)
 
-            # Save after an amount of batches
+            self.scheduler_G.step()
+            self.scheduler_D.step()
+
             batches_done = epoch * len(self.dataloader) + i
             if batches_done % self.config.opt.sample_interval == 0:
                 self.save_sample(batches_done)
                 self.save_weights(batches_done)
                 # self.save_training_data()
 
-        self.log_epoch_end(epoch)
+        # Validate after each epoch
+        val_loss = self.validate()
+
+        self.scheduler_G_plateau.step(val_loss)
+        self.scheduler_D_plateau.step(val_loss)
+
+        # self.log_epoch_end(epoch)
         observed_value = g_loss.item()
         carbs.observe(ObservationInParam(
             input=suggestion,
             output=observed_value,
             cost=epoch
         ))
-        self.writer.close()
+
+    def validate(self):
+        self.generator.eval()
+        self.discriminator.eval()
+        total_loss = 0.0
+        with torch.no_grad():
+            for imgs, masked_imgs, masked_parts in self.test_dataloader:
+                gen_parts, g_adv, g_pixel, g_loss, _ = self.process_batch(imgs, masked_imgs, masked_parts)
+                total_loss += g_loss.item()
+
+        avg_loss = total_loss / len(self.test_dataloader)
+        self.generator.train()
+        self.discriminator.train()
+        print(f"Validation loss: {avg_loss:.4f}")
+        return avg_loss
