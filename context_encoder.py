@@ -1,5 +1,6 @@
 import datetime
 import os
+import threading
 
 import torch
 import torch.nn as nn
@@ -89,62 +90,29 @@ class GANTrainer:
         dataset = ImageDataset(f"data/{self.config.opt.dataset_name}", transforms_=transforms_, mode=mode)
         dataloader = DataLoader(
             dataset,
-            self.config.opt.batch_size if mode == "train" else 12,
+            self.config.opt.batch_size if mode == "train" else 4,
             shuffle=True,
             num_workers=self.config.opt.n_cpu if mode == "train" else 1,
         )
         return dataloader
     
-    def save_sample(self, batches_done):
-        save_dir = 'images'
-        os.makedirs(save_dir, exist_ok=True)
+    def log_to_tensorboard(self, func, *args):
+        thread = threading.Thread(target=func, args=args)
+        thread.start()
 
-        samples, masked_samples, i = next(iter(self.test_dataloader))
-        samples = samples.type(self.config.Tensor)
-        masked_samples = masked_samples.type(self.config.Tensor)
-        i = 32      # TODO: make i a variable passed to the model
-        center_mask = self.config.opt.mask_size // 2 
-        gen_fram = self.generator(masked_samples)
-        center_part = masked_samples.clone()
-        gen_fram[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
-        sample = torch.cat((masked_samples, gen_fram, samples), -2)
-        save_path = os.path.join(save_dir, f"{batches_done}.png")
-        save_image(sample, save_path, nrow=6, normalize=True)
-    #     data = {
-    #         'epochs': np.array(self.epochs_list),
-    #         'd_losses': np.array(self.d_losses),
-    #         'g_adv_losses': np.array(self.g_adv_losses),
-    #         'g_pixel_losses': np.array(self.g_pixel_losses)
-    #     }
-    #     os.makedirs('./config_data', exist_ok=True)
-    #     np.save('./config_data/training_data.npy', data)
-
-    def log_training_progress(self, epoch, batch_idx, imgs, masked_imgs, masked_parts, 
-                              d_loss, g_adv, g_pixel, g_loss, global_step):
-        self.writer.add_scalar('Loss/Discriminator', d_loss.item(), global_step)
-        self.writer.add_scalar('Loss/Generator/Adversarial', g_adv.item(), global_step)
-        self.writer.add_scalar('Loss/Generator/Pixel', g_pixel.item(), global_step)
-        self.writer.add_scalar('Loss/Generator/Total', g_loss.item(), global_step)
+    def log_training_progress(self, d_loss, g_adv, g_pixel, g_loss, global_step):
+        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Discriminator', d_loss.item(), global_step)
+        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Adversarial', g_adv.item(), global_step)
+        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Pixel', g_pixel.item(), global_step)
+        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Total', g_loss.item(), global_step)
+        self.log_to_tensorboard(self.writer.add_scalar, 'Learning Rate/Generator', self.optimizer_G.param_groups[0]['lr'], global_step)
+        self.log_to_tensorboard(self.writer.add_scalar, 'Learning Rate/Discriminator', self.optimizer_D.param_groups[0]['lr'], global_step)
 
         if global_step % self.config.opt.sample_interval == 0:
-            self.log_images(imgs, masked_imgs, masked_parts, global_step)
+            self.log_images(global_step)
+            self.log_gradients(global_step)
+            # self.save_weights(batches_done)
 
-        # lr
-        self.writer.add_scalar('Learning Rate/Generator', self.optimizer_G.param_groups[0]['lr'], global_step)
-        self.writer.add_scalar('Learning Rate/Discriminator', self.optimizer_D.param_groups[0]['lr'], global_step)
-
-        self.log_gradients(global_step)
-
-    def log_images(self, imgs, masked_imgs, masked_parts, global_step):
-        with torch.no_grad():
-            fake_imgs = self.generator(masked_imgs)
-            img_grid = self.save_image_grid(fake_imgs, f"images/{global_step}.png")
-            self.writer.add_image('Generated Images', img_grid, global_step)
-
-            real_grid = self.save_image_grid(imgs, f"images/real_{global_step}.png")
-            masked_grid = self.save_image_grid(masked_imgs, f"images/masked_{global_step}.png")
-            self.writer.add_image('Real Images', real_grid, global_step)
-            self.writer.add_image('Masked Images', masked_grid, global_step)
 
     def log_gradients(self, global_step):
         for name, param in self.generator.named_parameters():
@@ -159,11 +127,27 @@ class GANTrainer:
         self.writer.add_histogram('Generator Weights', self.generator.state_dict()['weight'], epoch)
         self.writer.add_histogram('Discriminator Weights', self.discriminator.state_dict()['weight'], epoch)
 
-    @staticmethod
-    def save_image_grid(img_tensor, filename, nrow=8):
-        img_grid = torchvision.utils.make_grid(img_tensor, nrow=nrow, normalize=True)
-        torchvision.utils.save_image(img_grid, filename)
-        return img_grid
+    def log_images(self, global_step):
+        with torch.no_grad():
+            samples, masked_samples, masked_parts = next(iter(self.test_dataloader))
+
+            valid = torch.ones(samples.shape[0], 1, int(self.config.opt.mask_size / 2 ** 3), int(self.config.opt.mask_size / 2 ** 3)).type(self.config.Tensor)
+            samples = samples.type(self.config.Tensor)
+            masked_samples = masked_samples.type(self.config.Tensor)
+            i = 32  # TODO: make i a variable, passed to the model
+            center_mask = self.config.opt.mask_size // 2
+            gen_parts = self.generator(masked_samples)
+            g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
+            g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
+            center_part = masked_samples.clone()
+            gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
+            sample_imgs = torch.cat((masked_samples, gen_parts, samples), -2)
+
+            img_grid = torchvision.utils.make_grid(sample_imgs, nrow=4, normalize=True)
+            torchvision.utils.save_image(img_grid, f"images/{global_step}.png")
+            self.writer.add_image('Generated Images', img_grid, global_step)
+            self.writer.add_scalar('TestLoss/Generator/Adversarial', g_adv.item(), global_step)
+            self.writer.add_scalar('TestLoss/Generator/Pixel', g_pixel.item(), global_step)
 
 
     def save_weights(self, epoch):
@@ -247,24 +231,8 @@ class GANTrainer:
                 f"[D loss: {d_loss.item():.6f}] [G adv: {g_adv.item():.3f}, pixel: {g_pixel.item():.3f}]"
             )
 
-            # Save loss data into arrays
-            # self.epochs_list.append(epoch + i / len(self.dataloader))
-            # self.d_losses.append(d_loss.item())
-            # self.g_adv_losses.append(g_adv.item())
-            # self.g_pixel_losses.append(g_pixel.item())
-
-            # global_step = epoch * len(self.dataloader) + i
-            # self.log_training_progress(epoch, i, imgs, masked_imgs, masked_parts, 
-            #                             d_loss, g_adv, g_pixel, g_loss, global_step)
-
-            self.scheduler_G.step()
-            self.scheduler_D.step()
-
-            batches_done = epoch * len(self.dataloader) + i
-            if batches_done % self.config.opt.sample_interval == 0:
-                self.save_sample(batches_done)
-                self.save_weights(batches_done)
-                # self.save_training_data()
+            global_step = epoch * len(self.dataloader) + i
+            self.log_training_progress(d_loss, g_adv, g_pixel, g_loss, global_step)
 
         # Validate after each epoch
         val_loss = self.validate()
@@ -274,6 +242,7 @@ class GANTrainer:
 
         # self.log_epoch_end(epoch)
         observed_value = g_loss.item()
+
         carbs.observe(ObservationInParam(
             input=suggestion,
             output=observed_value,
