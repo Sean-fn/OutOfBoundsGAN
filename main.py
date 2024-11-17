@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 def main():
     config = Config()
     print(config.opt)
-    writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}/')#{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}')
+    writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}/ViT_BatchSize=4_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}')
     trainer = GANTrainer(config, writer)
     carbs = param_schedualer(config)
     load_weights(config, trainer)
