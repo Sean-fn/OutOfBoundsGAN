@@ -60,8 +60,9 @@ class ImageDataset(Dataset):
         mask[:, i:i+self.mask_size, i:i+self.mask_size] = 0
         
         masked_img = img * (1 - mask) + mask
+        masked_part = img * mask
         
-        return masked_img, i
+        return masked_img, masked_part
     
     def apply_frame_mask(self, img):
         """Mask edge part of image(for frame generation)"""

@@ -6,7 +6,7 @@ class Config:
         parser = argparse.ArgumentParser()
         # TODO: early stopping
         parser.add_argument("--n_epochs", type=int, default=200)
-        parser.add_argument("--batch_size", type=int, default=320)
+        parser.add_argument("--batch_size", type=int, default=256)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")
         parser.add_argument("--dataset_name", type=str, default="street")
         parser.add_argument("--lr", type=float, default=0.00009)
@@ -17,11 +17,18 @@ class Config:
         parser.add_argument("--img_size", type=int, default=128)
         parser.add_argument("--mask_size", type=int, default=128)
         parser.add_argument("--channels", type=int, default=3)
-        parser.add_argument("--sample_interval", type=int, default=100)
+        parser.add_argument("--sample_interval", type=int, default=200)
         parser.add_argument("--run_name", type=str, default="GAN_experiment")
         # TODO: resume training with one argument
         parser.add_argument("--resume_num", type=str, default="latest")
-        parser.add_argument("--resume_start_num", type=int, default=200)
+        parser.add_argument("--resume_start_num", type=int, default=2)
+
+        parser.add_argument("--lr_min", type=float, default=1e-5)
+        parser.add_argument("--lr_max", type=float, default=1e-3)
+        parser.add_argument("--step_size_up", type=int, default=200)
+        parser.add_argument("--plateau_factor", type=float, default=0.5)
+        parser.add_argument("--plateau_patience", type=int, default=5)
+        
         self.opt = parser.parse_args()
         
         self.cuda = True if torch.cuda.is_available() else False
