@@ -40,7 +40,7 @@ class GANTrainer:
         self.g_adv_losses = []
         self.g_pixel_losses = []
 
-        self.writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}/CNN_BatchSize=4_{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}')
+        self.writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}/CNN_BatchSize=256_{datetime.datetime.now().strftime("%Y%m%d-%H%M")}')
         
     def get_dataloader(self, mode="train"):
         transforms_ = [
@@ -103,7 +103,7 @@ class GANTrainer:
 
 
     def save_weights(self, epoch):
-        weights_dir = 'weights'
+        weights_dir = f'weights/{self.config.opt.run_name}'
         os.makedirs(weights_dir, exist_ok=True)
 
         # if os.path.exists(os.path.join(weights_dir, 'generator_latest.pth')):

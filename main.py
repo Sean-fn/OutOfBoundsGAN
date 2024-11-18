@@ -9,7 +9,8 @@ def main():
     config = Config()
     print(config.opt)
     trainer = GANTrainer(config)
-    load_weights(config, trainer)
+    if config.opt.resume_start_num != 0:
+        load_weights(config, trainer)
     for epoch in range(config.opt.n_epochs):
         trainer.train(epoch)
 
