@@ -5,6 +5,7 @@ class Config:
     def __init__(self):
         parser = argparse.ArgumentParser()
         # TODO: early stopping
+<<<<<<< HEAD
         parser.add_argument("--n_epochs", type=int, default=1)
         parser.add_argument("--batch_size", type=int, default=4)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")

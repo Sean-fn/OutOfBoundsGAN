@@ -142,7 +142,7 @@ class GANTrainer:
 
 
     def save_weights(self, epoch):
-        weights_dir = 'weights'
+        weights_dir = f'weights/{self.config.opt.run_name}'
         os.makedirs(weights_dir, exist_ok=True)
 
         # if os.path.exists(os.path.join(weights_dir, 'generator_latest.pth')):
