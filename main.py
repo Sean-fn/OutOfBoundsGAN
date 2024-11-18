@@ -12,6 +12,7 @@ def main():
     config = Config()
     print(config.opt, ('-' for _ in range(len(15))))
 
+    #BUG: has to be resume with the globo_step to continue the logging
     writer = SummaryWriter(log_dir=config.opt.last_log if config.opt.resume_start_num != 0 
                           else f'logs/{config.opt.run_name}_BatchSize={config.opt.batch_size}_{datetime.datetime.now().strftime("%m%d-%H%M")}')
     trainer = GANTrainer(config, writer)
