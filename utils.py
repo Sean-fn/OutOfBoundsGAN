@@ -13,7 +13,7 @@ def load_weights(config, trainer):
         if os.path.exists(discriminator_path):
             trainer.discriminator.load_state_dict(torch.load(discriminator_path))
             trainer.generator.load_state_dict(torch.load(generator_path))
-            print("Loaded pre-trained weights")
+            print("**Loaded pre-trained weights**")
         else:
             resume_num = 0
             print("Fetching the pre-trained weights, but nothing found. Starting from scratch.")

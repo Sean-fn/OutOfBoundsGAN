@@ -1,5 +1,7 @@
 import argparse
+
 import torch
+import os
 
 class Config:
     def __init__(self):
@@ -19,6 +21,7 @@ class Config:
         parser.add_argument("--channels", type=int, default=3)
         parser.add_argument("--sample_interval", type=int, default=250)
         parser.add_argument("--run_name", type=str, default="ArchiComp")
+        parser.add_argument("--last_log", type=str, default=max((os.path.join("logs", f) for f in os.listdir("logs")) if os.path.exists("logs") and os.listdir("logs") else ["logs/default"]), key=os.path.getmtime)
         # TODO: resume training with one argument
         parser.add_argument("--resume_num", type=str, default="latest")
         parser.add_argument("--resume_start_num", type=int, default=0, help="Set to 0 if not resuming")
