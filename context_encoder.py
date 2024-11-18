@@ -11,7 +11,7 @@ from torchvision.utils import save_image
 from PIL import Image
 import numpy as np
 from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
-from carbs import ObservationInParam
+# from carbs import ObservationInParam
 
 from datasets import ImageDataset
 from models import Generator, Discriminator
@@ -178,15 +178,16 @@ class GANTrainer:
 
         return gen_parts, g_adv, g_pixel, g_loss, d_loss
 
-    def train(self, epoch, carbs):
+    # def train(self, epoch, carbs):
+    def train(self, epoch):
         # Suggest new learning rate from CARBS
-        suggestion = carbs.suggest().suggestion
-        self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
-        self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
-        self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
-        self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
-        self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
-        self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
+        # suggestion = carbs.suggest().suggestion
+        # self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
+        # self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
+        # self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
+        # self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
+        # self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
+        # self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
 
         # Update optimizer with new learning rate
         for param_group in self.optimizer_G.param_groups:
@@ -231,14 +232,13 @@ class GANTrainer:
         self.scheduler_G_plateau.step(val_loss)
         self.scheduler_D_plateau.step(val_loss)
 
-        # self.log_epoch_end(epoch)
-        observed_value = g_loss.item()
 
-        carbs.observe(ObservationInParam(
-            input=suggestion,
-            output=observed_value,
-            cost=epoch
-        ))
+        # observed_value = g_loss.item()
+        # carbs.observe(ObservationInParam(
+        #     input=suggestion,
+        #     output=observed_value,
+        #     cost=epoch
+        # ))
 
     def validate(self):
         self.generator.eval()
