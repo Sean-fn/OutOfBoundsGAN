@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 def main():
     config = Config()
-    print(config.opt, ('-' for _ in range(len(15))))
+    print(config.opt)
 
     #BUG: has to be resume with the globo_step to continue the logging
     writer = SummaryWriter(log_dir=config.opt.last_log if config.opt.resume_start_num != 0 
