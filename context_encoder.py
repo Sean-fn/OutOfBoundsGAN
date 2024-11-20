@@ -9,9 +9,8 @@ import torchvision
 from torchvision import transforms
 from torchvision.utils import save_image
 from PIL import Image
-import numpy as np
 from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
-from carbs import ObservationInParam
+# from carbs import ObservationInParam
 
 from datasets import ImageDataset
 from models import Generator, Discriminator
@@ -19,6 +18,7 @@ from models import Generator, Discriminator
 class GANTrainer:
     def __init__(self, config, writer):
         self.config = config
+        self.early_stopping = False
         self.generator = Generator(channels=config.opt.channels)
         self.discriminator = Discriminator(channels=config.opt.channels)
         self.adversarial_loss = nn.MSELoss()
@@ -40,14 +40,16 @@ class GANTrainer:
             base_lr=config.opt.lr_min, 
             max_lr=config.opt.lr_max,
             step_size_up=config.opt.step_size_up,
-            mode='triangular'
+            mode='exp_range',
+            gamma=config.opt.lr_gamma
         )
         self.scheduler_D = CyclicLR(
             self.optimizer_D, 
             base_lr=config.opt.lr_min, 
             max_lr=config.opt.lr_max,
             step_size_up=config.opt.step_size_up,
-            mode='triangular'
+            mode='exp_range',
+            gamma=config.opt.lr_gamma
         )
 
         self.scheduler_G_plateau = ReduceLROnPlateau(
@@ -163,7 +165,6 @@ class GANTrainer:
         valid = torch.ones(batch_size, 1, label_size, label_size).type(self.config.Tensor)
         fake = torch.zeros(batch_size, 1, label_size, label_size).type(self.config.Tensor)
 
-        # Forward pass
         gen_parts = self.generator(masked_imgs)
 
         # Compute loss
@@ -178,15 +179,16 @@ class GANTrainer:
 
         return gen_parts, g_adv, g_pixel, g_loss, d_loss
 
-    def train(self, epoch, carbs):
+    # def train(self, epoch, carbs):
+    def train(self, epoch):
         # Suggest new learning rate from CARBS
-        suggestion = carbs.suggest().suggestion
-        self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
-        self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
-        self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
-        self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
-        self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
-        self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
+        # suggestion = carbs.suggest().suggestion
+        # self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
+        # self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
+        # self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
+        # self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
+        # self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
+        # self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
 
         # Update optimizer with new learning rate
         for param_group in self.optimizer_G.param_groups:
@@ -204,6 +206,8 @@ class GANTrainer:
         
         self.generator.train()
         self.discriminator.train()
+
+        prev_g_pixel = float('inf')
         
         # BUG: Dosen't resume training on the specific batch
         for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
@@ -222,25 +226,37 @@ class GANTrainer:
                 f"[D loss: {d_loss.item():.6f}] [G adv: {g_adv.item():.3f}, pixel: {g_pixel.item():.3f}]"
             )
 
+            if g_pixel < prev_g_pixel:
+                early_stopping = 0
+            else:
+                early_stopping += 1
+                prev_g_pixel = g_pixel
+
+            if early_stopping >= self.config.opt.early_stopping:
+                self.early_stopping = True
+                print(f"Early stopping at batch {i}")
+                return
+
             global_step = epoch * len(self.dataloader) + i
             self.log_training_progress(d_loss, g_adv, g_pixel, g_loss, global_step)
+            self.scheduler_G.step()
+            self.scheduler_D.step()
 
         # Validate after each epoch
-        val_loss = self.validate()
+        val_loss = self.validate(global_step)
 
         self.scheduler_G_plateau.step(val_loss)
         self.scheduler_D_plateau.step(val_loss)
 
-        # self.log_epoch_end(epoch)
-        observed_value = g_loss.item()
 
-        carbs.observe(ObservationInParam(
-            input=suggestion,
-            output=observed_value,
-            cost=epoch
-        ))
+        # observed_value = g_loss.item()
+        # carbs.observe(ObservationInParam(
+        #     input=suggestion,
+        #     output=observed_value,
+        #     cost=epoch
+        # ))
 
-    def validate(self):
+    def validate(self,global_step):
         self.generator.eval()
         self.discriminator.eval()
         total_loss = 0.0
@@ -253,4 +269,5 @@ class GANTrainer:
         self.generator.train()
         self.discriminator.train()
         print(f"Validation loss: {avg_loss:.4f}")
+        self.writer.add_scalar('Loss/Validation', avg_loss, global_step)
         return avg_loss

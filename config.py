@@ -8,7 +8,7 @@ class Config:
         parser = argparse.ArgumentParser()
         # TODO: early stopping
         parser.add_argument("--n_epochs", type=int, default=5)
-        parser.add_argument("--batch_size", type=int, default=8)
+        parser.add_argument("--batch_size", type=int, default=32)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")
         parser.add_argument("--dataset_name", type=str, default="street")
         parser.add_argument("--lr", type=float, default=0.00009)
@@ -31,7 +31,7 @@ class Config:
         parser.add_argument("--step_size_up", type=int, default=200)
         parser.add_argument("--plateau_factor", type=float, default=0.5)
         parser.add_argument("--plateau_patience", type=int, default=5)
-        
+
         self.opt = parser.parse_args()
         
         self.cuda = True if torch.cuda.is_available() else False
