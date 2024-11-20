@@ -180,15 +180,6 @@ class GANTrainer:
 
     # def train(self, epoch, carbs):
     def train(self, epoch):
-        # Suggest new learning rate from CARBS
-        # suggestion = carbs.suggest().suggestion
-        # self.config.opt.lr = suggestion.get('lr', self.config.opt.lr)
-        # self.config.opt.lr_min = suggestion.get('lr_min', self.config.opt.lr_min)
-        # self.config.opt.lr_max = suggestion.get('lr_max', self.config.opt.lr_max)
-        # self.config.opt.step_size_up = suggestion.get('step_size_up', self.config.opt.step_size_up)
-        # self.config.opt.plateau_factor = suggestion.get('plateau_factor', self.config.opt.plateau_factor)
-        # self.config.opt.plateau_patience = suggestion.get('plateau_patience', self.config.opt.plateau_patience)
-
         # Update optimizer with new learning rate
         for param_group in self.optimizer_G.param_groups:
             param_group['lr'] = self.config.opt.lr
@@ -249,14 +240,6 @@ class GANTrainer:
 
         self.scheduler_G_plateau.step(val_loss)
         self.scheduler_D_plateau.step(val_loss)
-
-
-        # observed_value = g_loss.item()
-        # carbs.observe(ObservationInParam(
-        #     input=suggestion,
-        #     output=observed_value,
-        #     cost=epoch
-        # ))
 
     def validate(self,global_step):
         self.generator.eval()
