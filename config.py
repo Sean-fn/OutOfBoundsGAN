@@ -28,6 +28,7 @@ class Config:
 
         parser.add_argument("--lr_min", type=float, default=1e-5)
         parser.add_argument("--lr_max", type=float, default=1e-3)
+        parser.add_argument("--lr_gamma", type=float, default=0.98)
         parser.add_argument("--step_size_up", type=int, default=200)
         parser.add_argument("--plateau_factor", type=float, default=0.5)
         parser.add_argument("--plateau_patience", type=int, default=5)
