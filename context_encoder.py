@@ -3,6 +3,7 @@ import os
 import threading
 
 import torch
+from torch.amp import GradScaler, autocast
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torchvision
@@ -165,17 +166,16 @@ class GANTrainer:
         valid = torch.ones(batch_size, 1, label_size, label_size).type(self.config.Tensor)
         fake = torch.zeros(batch_size, 1, label_size, label_size).type(self.config.Tensor)
 
-        gen_parts = self.generator(masked_imgs)
 
-        # Compute loss
-        g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
-        g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
-        g_loss = 0.001 * g_adv + 0.999 * g_pixel
+        with autocast(device_type="cuda" if self.config.cuda else "cpu"):
+            gen_parts = self.generator(masked_imgs)
+            g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
+            g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
+            g_loss = 0.001 * g_adv + 0.999 * g_pixel
 
-        # Discriminator loss
-        real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
-        fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
-        d_loss = 0.5 * (real_loss + fake_loss)
+            real_loss = self.adversarial_loss(self.discriminator(masked_parts), valid)
+            fake_loss = self.adversarial_loss(self.discriminator(gen_parts.detach()), fake)
+            d_loss = 0.5 * (real_loss + fake_loss)
 
         return gen_parts, g_adv, g_pixel, g_loss, d_loss
 
@@ -209,17 +209,20 @@ class GANTrainer:
 
         prev_g_pixel = float('inf')
         
+        scaler = GradScaler()
         # BUG: Dosen't resume training on the specific batch
         for i, (imgs, masked_imgs, masked_parts) in enumerate(self.dataloader, start=int(self.config.opt.resume_start_num)+1):
             gen_parts, g_adv, g_pixel, g_loss, d_loss = self.process_batch(imgs, masked_imgs, masked_parts)
 
             self.optimizer_G.zero_grad()
-            g_loss.backward()
-            self.optimizer_G.step()
+            scaler.scale(g_loss).backward()
+            scaler.step(self.optimizer_G)
+            scaler.update()
 
             self.optimizer_D.zero_grad()
-            d_loss.backward()
-            self.optimizer_D.step()
+            scaler.scale(d_loss).backward()
+            scaler.step(self.optimizer_D)
+            scaler.update()
 
             print(
                 f"[Epoch {epoch}/{self.config.opt.n_epochs}] [Batch {i}/{len(self.dataloader)}] "
