@@ -136,7 +136,7 @@ class GANTrainer:
             gen_parts = self.generator(masked_samples)
             center_part = masked_samples.clone()
             gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
-            sample_imgs = torch.cat((masked_samples, gen_parts, samples), -2)
+            sample_imgs = torch.cat((masked_samples.cpu(), gen_parts.cpu(), samples.cpu()), -2)
 
             img_grid = torchvision.utils.make_grid(sample_imgs, nrow=4, normalize=True)
             torchvision.utils.save_image(img_grid, f"images/{global_step}.png")
