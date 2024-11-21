@@ -12,7 +12,7 @@ from PIL import Image
 from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 # from carbs import ObservationInParam
 
-from datasets import ImageDataset
+from datasets import get_dataloader
 from models import Generator, Discriminator
 from utils import Logger
 
@@ -74,8 +74,8 @@ class GANTrainer:
             self.adversarial_loss.cuda()
             self.pixelwise_loss.cuda()
         
-        self.dataloader = self.get_dataloader()
-        self.test_dataloader = self.get_dataloader(mode="val")
+        self.dataloader = get_dataloader(config)
+        self.test_dataloader = get_dataloader(config, mode="val")
 
         self.writer = writer
         self.logger = Logger(
@@ -87,22 +87,6 @@ class GANTrainer:
             self.test_dataloader,
             self.config
         )
-        
-    # TODO: move to datasets.py
-    def get_dataloader(self, mode="train"):
-        transforms_ = [
-            transforms.Resize((self.config.opt.img_size, self.config.opt.img_size), Image.BICUBIC),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]
-        dataset = ImageDataset(f"data/{self.config.opt.dataset_name}", transforms_=transforms_, mode=mode)
-        dataloader = DataLoader(
-            dataset,
-            self.config.opt.batch_size if mode == "train" else 4,
-            shuffle=True,
-            num_workers=self.config.opt.n_cpu if mode == "train" else 1,
-        )
-        return dataloader
 
     def process_batch(self, imgs, masked_imgs, masked_parts):
         imgs = imgs.type(self.config.Tensor)

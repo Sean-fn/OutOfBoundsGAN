@@ -88,6 +88,22 @@ class ImageDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
+
+def get_dataloader(config, mode="train"):
+    transforms_ = [
+        transforms.Resize((config.opt.img_size, config.opt.img_size), Image.BICUBIC),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+    ]
+    dataset = ImageDataset(f"data/{config.opt.dataset_name}", transforms_=transforms_, mode=mode)
+    dataloader = DataLoader(
+        dataset,
+        config.opt.batch_size if mode == "train" else 4,
+        shuffle=True,
+        num_workers=config.opt.n_cpu if mode == "train" else 1,
+    )
+    return dataloader
+
 #     def visualize_samples(self, num_samples=5, save_dir='./'):
 #         os.makedirs(save_dir, exist_ok=True)
 #         for i in range(num_samples):
