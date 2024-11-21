@@ -14,6 +14,7 @@ from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 
 from datasets import ImageDataset
 from models import Generator, Discriminator
+from utils import Logger
 
 class GANTrainer:
     def __init__(self, config, writer):
@@ -76,13 +77,18 @@ class GANTrainer:
         self.dataloader = self.get_dataloader()
         self.test_dataloader = self.get_dataloader(mode="val")
 
-        self.epochs_list = []
-        self.d_losses = []
-        self.g_adv_losses = []
-        self.g_pixel_losses = []
-
         self.writer = writer
+        self.logger = Logger(
+            self.writer,
+            self.generator,
+            self.discriminator,
+            self.optimizer_G,
+            self.optimizer_D,
+            self.test_dataloader,
+            self.config
+        )
         
+    # TODO: move to datasets.py
     def get_dataloader(self, mode="train"):
         transforms_ = [
             transforms.Resize((self.config.opt.img_size, self.config.opt.img_size), Image.BICUBIC),
@@ -97,63 +103,6 @@ class GANTrainer:
             num_workers=self.config.opt.n_cpu if mode == "train" else 1,
         )
         return dataloader
-    
-    def log_to_tensorboard(self, func, *args):
-        thread = threading.Thread(target=func, args=args)
-        thread.start()
-
-    def log_training_progress(self, d_loss, g_adv, g_pixel, g_loss, global_step):
-        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Discriminator', d_loss.item(), global_step)
-        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Adversarial', g_adv.item(), global_step)
-        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Pixel', g_pixel.item(), global_step)
-        self.log_to_tensorboard(self.writer.add_scalar, 'Loss/Generator/Total', g_loss.item(), global_step)
-        self.log_to_tensorboard(self.writer.add_scalar, 'Learning Rate/Generator', self.optimizer_G.param_groups[0]['lr'], global_step)
-        self.log_to_tensorboard(self.writer.add_scalar, 'Learning Rate/Discriminator', self.optimizer_D.param_groups[0]['lr'], global_step)
-
-        if global_step % self.config.opt.sample_interval == 0:
-            self.log_images(global_step)
-            self.log_gradients(global_step)
-            self.save_weights(global_step)
-
-
-    def log_gradients(self, global_step):
-        for name, param in self.generator.named_parameters():
-            if param.grad is not None:
-                self.writer.add_histogram(f'Generator Gradients/{name}', param.grad, global_step)
-        
-        for name, param in self.discriminator.named_parameters():
-            if param.grad is not None:
-                self.writer.add_histogram(f'Discriminator Gradients/{name}', param.grad, global_step)
-
-    def log_images(self, global_step):
-        with torch.no_grad():
-            samples, masked_samples, masked_parts = next(iter(self.test_dataloader))
-
-            samples = samples.type(self.config.Tensor)
-            masked_samples = masked_samples.type(self.config.Tensor)
-            i = 32  # TODO: make i a variable, passed to the model
-            center_mask = self.config.opt.mask_size // 2
-            gen_parts = self.generator(masked_samples)
-            center_part = masked_samples.clone()
-            gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
-            sample_imgs = torch.cat((masked_samples.cpu(), gen_parts.cpu(), samples.cpu()), -2)
-
-            img_grid = torchvision.utils.make_grid(sample_imgs, nrow=4, normalize=True)
-            torchvision.utils.save_image(img_grid, f"images/{global_step}.png")
-            self.writer.add_image('Generated Images', img_grid, global_step)
-
-
-    def save_weights(self, epoch):
-        weights_dir = f'weights/{self.config.opt.run_name}'
-        os.makedirs(weights_dir, exist_ok=True)
-
-        # if os.path.exists(os.path.join(weights_dir, 'generator_latest.pth')):
-        #     os.rename(os.path.join(weights_dir, 'generator_latest.pth'), os.path.join(weights_dir, f'generator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
-        #     os.rename(os.path.join(weights_dir, 'discriminator_latest.pth'), os.path.join(weights_dir, f'discriminator_epoch_{epoch - self.config.opt.sample_interval}.pth'))
-        torch.save(self.generator.state_dict(), os.path.join(weights_dir, 'generator_latest.pth'))
-        torch.save(self.discriminator.state_dict(), os.path.join(weights_dir, 'discriminator_latest.pth'))
-
-        print(f"Saved model weights for epoch {epoch}")
 
     def process_batch(self, imgs, masked_imgs, masked_parts):
         imgs = imgs.type(self.config.Tensor)
@@ -178,7 +127,6 @@ class GANTrainer:
 
         return gen_parts, g_adv, g_pixel, g_loss, d_loss
 
-    # def train(self, epoch, carbs):
     def train(self, epoch):
         # Update optimizer with new learning rate
         for param_group in self.optimizer_G.param_groups:
@@ -231,7 +179,7 @@ class GANTrainer:
                 return
 
             global_step = epoch * len(self.dataloader) + i
-            self.log_training_progress(d_loss, g_adv, g_pixel, g_loss, global_step)
+            self.logger.log_training_progress(d_loss, g_adv, g_pixel, g_loss, global_step)
             self.scheduler_G.step()
             self.scheduler_D.step()
 
@@ -254,5 +202,5 @@ class GANTrainer:
         self.generator.train()
         self.discriminator.train()
         print(f"Validation loss: {avg_loss:.4f}")
-        self.writer.add_scalar('Loss/Validation', avg_loss, global_step)
+        self.logger.log_validation_loss(avg_loss, global_step)
         return avg_loss
