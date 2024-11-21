@@ -5,6 +5,7 @@ weights
 checkpoints
 TODO.md
 plot_loss.py
+nohup.out
 
 
 *.json
