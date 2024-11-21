@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 from torch.amp import GradScaler, autocast
-from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 
 from datasets import get_dataloader
 from models import Generator, Discriminator
-from utils import Logger
+from utils import Logger, create_optim
 
 class GANTrainer:
     def __init__(self, config, writer):
@@ -16,47 +15,10 @@ class GANTrainer:
         self.adversarial_loss = nn.MSELoss()
         self.pixelwise_loss = nn.L1Loss()
         
-        self.optimizer_G = torch.optim.Adam(
-            self.generator.parameters(), 
-            lr=config.opt.lr, 
-            betas=(config.opt.b1, config.opt.b2)
-        )
-        self.optimizer_D = torch.optim.Adam(
-            self.discriminator.parameters(), 
-            lr=config.opt.lr, 
-            betas=(config.opt.b1, config.opt.b2)
-        )
-
-        self.scheduler_G = CyclicLR(
-            self.optimizer_G, 
-            base_lr=config.opt.lr_min, 
-            max_lr=config.opt.lr_max,
-            step_size_up=config.opt.step_size_up,
-            mode='exp_range',
-            gamma=config.opt.lr_gamma
-        )
-        self.scheduler_D = CyclicLR(
-            self.optimizer_D, 
-            base_lr=config.opt.lr_min, 
-            max_lr=config.opt.lr_max,
-            step_size_up=config.opt.step_size_up,
-            mode='exp_range',
-            gamma=config.opt.lr_gamma
-        )
-
-        self.scheduler_G_plateau = ReduceLROnPlateau(
-            self.optimizer_G, 
-            mode='min', 
-            factor=config.opt.plateau_factor, 
-            patience=config.opt.plateau_patience, 
-            verbose=True
-        )
-        self.scheduler_D_plateau = ReduceLROnPlateau(
-            self.optimizer_D, 
-            mode='min', 
-            factor=config.opt.plateau_factor, 
-            patience=config.opt.plateau_patience, 
-            verbose=True
+        (self.optimizer_G, self.optimizer_D,
+         self.scheduler_G, self.scheduler_D,
+         self.scheduler_G_plateau, self.scheduler_D_plateau) = create_optim(
+            self.generator, self.discriminator, config
         )
 
         if config.cuda:

@@ -1,5 +1,6 @@
 import os
 import torch
+from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 import torchvision
 import threading
 
@@ -19,6 +20,55 @@ def load_weights(config, trainer):
         else:
             resume_num = 0
             print("Fetching the pre-trained weights, but nothing found. Starting from scratch.")
+
+def create_optim(model_G, model_D, config):
+    """Create optimizers and schedulers for both generator and discriminator"""
+    optimizer_G = torch.optim.Adam(
+        model_G.parameters(),
+        lr=config.opt.lr,
+        betas=(config.opt.b1, config.opt.b2)
+    )
+    optimizer_D = torch.optim.Adam(
+        model_D.parameters(),
+        lr=config.opt.lr,
+        betas=(config.opt.b1, config.opt.b2)
+    )
+
+    scheduler_G = CyclicLR(
+        optimizer_G,
+        base_lr=config.opt.lr_min,
+        max_lr=config.opt.lr_max,
+        step_size_up=config.opt.step_size_up,
+        mode='exp_range',
+        gamma=config.opt.lr_gamma
+    )
+    scheduler_D = CyclicLR(
+        optimizer_D,
+        base_lr=config.opt.lr_min,
+        max_lr=config.opt.lr_max,
+        step_size_up=config.opt.step_size_up,
+        mode='exp_range',
+        gamma=config.opt.lr_gamma
+    )
+
+    scheduler_G_plateau = ReduceLROnPlateau(
+        optimizer_G,
+        mode='min',
+        factor=config.opt.plateau_factor,
+        patience=config.opt.plateau_patience,
+        verbose=True
+    )
+    scheduler_D_plateau = ReduceLROnPlateau(
+        optimizer_D,
+        mode='min',
+        factor=config.opt.plateau_factor,
+        patience=config.opt.plateau_patience,
+        verbose=True
+    )
+
+    return (optimizer_G, optimizer_D, 
+            scheduler_G, scheduler_D,
+            scheduler_G_plateau, scheduler_D_plateau)
 
 class Logger:
     def __init__(self, writer, generator, discriminator, optimizer_G, optimizer_D, test_dataloader, config):
