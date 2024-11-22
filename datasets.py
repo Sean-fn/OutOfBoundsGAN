@@ -19,7 +19,7 @@ class ImageDataset(Dataset):
         self.files = sorted(glob.glob("%s/*.jpeg" % root))
         self.files = self.files[:-4000] if mode == "train" else self.files[-4000:]
 
-    def apply_random_mask(self, img):
+    def apply_random_center_mask(self, img):
         """Randomly masks image"""
         y1, x1 = np.random.randint(0, self.img_size - self.mask_size, 2)
         y2, x2 = y1 + self.mask_size, x1 + self.mask_size
