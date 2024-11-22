@@ -52,7 +52,7 @@ class GANTrainer:
         fake = torch.zeros(batch_size, 1, label_size, label_size).type(self.config.Tensor)
 
 
-        with autocast(device_type="cuda" if self.config.cuda else "cpu"):
+        with autocast(device_type=self.onfig.device, dtype=torch.float16):
             gen_parts = self.generator(masked_imgs)
             g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
             g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
