@@ -15,7 +15,7 @@ def main():
     config = Config()
     device = config.device
 
-    generator = Generator(channels=3).to(device)
+    generator = Generator().to(device)
     generator.eval()
 
     generator.load_state_dict(torch.load('weights/generator_latest.pth', map_location=device))
@@ -25,7 +25,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ]
-    dataset = ImageDataset(config.opt.dataset_name, transforms_=transforms_, mode="val")
+    dataset = ImageDataset("data/street", transforms_=transforms_, mode="val")
     dataloader = DataLoader(dataset, batch_size=12, shuffle=False)
 
     imgs, masked_imgs, _ = next(iter(dataloader))
@@ -38,7 +38,7 @@ def main():
 
         center_part = masked_imgs.clone()
         i = 32
-        center_mask = config.opt.mask_size // 2
+        center_mask = 128 // 2
         gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
 
     sample_imgs = torch.cat((masked_imgs.cpu(), center_part.cpu(), imgs.cpu()), -2)
