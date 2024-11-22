@@ -20,7 +20,7 @@ class ImageDataset(Dataset):
         self.files = self.files[:-4000] if mode == "train" else self.files[-4000:]
 
     def apply_random_center_mask(self, img):
-        """Randomly masks image"""
+        """Randomly center masks image (for face generation)"""
         y1, x1 = np.random.randint(0, self.img_size - self.mask_size, 2)
         y2, x2 = y1 + self.mask_size, x1 + self.mask_size
         masked_part = img[:, y1:y2, x1:x2]
@@ -30,7 +30,7 @@ class ImageDataset(Dataset):
         return masked_img, masked_part
 
     def apply_center_mask(self, img):
-        """Mask center part of image(for face generation)"""
+        """Mask center part of image (for face generation)"""
         i = (self.img_size - self.mask_size) // 2
         masked_img = img.clone()
         masked_img[:, i : i + self.mask_size, i : i + self.mask_size] = 1
