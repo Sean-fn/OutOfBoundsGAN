@@ -7,7 +7,7 @@ from models import Generator, Discriminator
 from utils import Logger, create_optim
 
 class GANTrainer:
-    def __init__(self, config, writer):
+    def __init__(self, config):
         self.config = config
         self.early_stopping = False
         self.generator = Generator(channels=config.opt.channels)
@@ -30,9 +30,7 @@ class GANTrainer:
         self.dataloader = get_dataloader(config)
         self.test_dataloader = get_dataloader(config, mode="val")
 
-        self.writer = writer
         self.logger = Logger(
-            self.writer,
             self.generator,
             self.discriminator,
             self.optimizer_G,

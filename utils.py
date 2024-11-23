@@ -1,8 +1,10 @@
 import os
+import datetime
 import torch
 from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 import torchvision
 import threading
+from torch.utils.tensorboard import SummaryWriter
 
 def load_weights(config, trainer):
     """
@@ -71,8 +73,8 @@ def create_optim(model_G, model_D, config):
             scheduler_G_plateau, scheduler_D_plateau)
 
 class Logger:
-    def __init__(self, writer, generator, discriminator, optimizer_G, optimizer_D, test_dataloader, config):
-        self.writer = writer
+    def __init__(self, generator, discriminator, optimizer_G, optimizer_D, test_dataloader, config):
+        self.writer = SummaryWriter(log_dir=f'logs/cont_{config.opt.run_name}_BatchSize={config.opt.batch_size}_{datetime.datetime.now().strftime("%m%d-%H%M")}')
         self.generator = generator
         self.discriminator = discriminator
         self.optimizer_G = optimizer_G
@@ -133,3 +135,7 @@ class Logger:
         torch.save(self.generator.state_dict(), os.path.join(weights_dir, 'generator_latest.pth'))
         torch.save(self.discriminator.state_dict(), os.path.join(weights_dir, 'discriminator_latest.pth'))
         print(f"Saved model weights for epoch {epoch}")
+
+    def close(self):
+        """Close the TensorBoard writer"""
+        self.writer.close()
