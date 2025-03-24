@@ -36,45 +36,45 @@ def create_optim(model_G, model_D, config):
         betas=(config.opt.b1, config.opt.b2)
     )
 
-    scheduler_G = CyclicLR(
-        optimizer_G,
-        base_lr=config.opt.lr_min,
-        max_lr=config.opt.lr_max,
-        step_size_up=config.opt.step_size_up,
-        mode='exp_range',
-        gamma=config.opt.lr_gamma
-    )
-    scheduler_D = CyclicLR(
-        optimizer_D,
-        base_lr=config.opt.lr_min,
-        max_lr=config.opt.lr_max,
-        step_size_up=config.opt.step_size_up,
-        mode='exp_range',
-        gamma=config.opt.lr_gamma
-    )
+    # scheduler_G = CyclicLR(
+    #     optimizer_G,
+    #     base_lr=config.opt.lr_min,
+    #     max_lr=config.opt.lr_max,
+    #     step_size_up=config.opt.step_size_up,
+    #     mode='exp_range',
+    #     gamma=config.opt.lr_gamma
+    # )
+    # scheduler_D = CyclicLR(
+    #     optimizer_D,
+    #     base_lr=config.opt.lr_min,
+    #     max_lr=config.opt.lr_max,
+    #     step_size_up=config.opt.step_size_up,
+    #     mode='exp_range',
+    #     gamma=config.opt.lr_gamma
+    # )
 
-    scheduler_G_plateau = ReduceLROnPlateau(
-        optimizer_G,
-        mode='min',
-        factor=config.opt.plateau_factor,
-        patience=config.opt.plateau_patience,
-        verbose=True
-    )
-    scheduler_D_plateau = ReduceLROnPlateau(
-        optimizer_D,
-        mode='min',
-        factor=config.opt.plateau_factor,
-        patience=config.opt.plateau_patience,
-        verbose=True
-    )
+    # scheduler_G_plateau = ReduceLROnPlateau(
+    #     optimizer_G,
+    #     mode='min',
+    #     factor=config.opt.plateau_factor,
+    #     patience=config.opt.plateau_patience,
+    #     verbose=True
+    # )
+    # scheduler_D_plateau = ReduceLROnPlateau(
+    #     optimizer_D,
+    #     mode='min',
+    #     factor=config.opt.plateau_factor,
+    #     patience=config.opt.plateau_patience,
+    #     verbose=True
+    # )
 
-    return (optimizer_G, optimizer_D, 
-            scheduler_G, scheduler_D,
-            scheduler_G_plateau, scheduler_D_plateau)
+    return (optimizer_G, optimizer_D, )
+            # scheduler_G, scheduler_D,
+            # scheduler_G_plateau, scheduler_D_plateau)
 
 class Logger:
     def __init__(self, generator, discriminator, optimizer_G, optimizer_D, test_dataloader, config):
-        self.writer = SummaryWriter(log_dir=f'logs/cont_{config.opt.run_name}_BatchSize={config.opt.batch_size}_{datetime.datetime.now().strftime("%m%d-%H%M")}')
+        self.writer = SummaryWriter(log_dir=f'logs/{config.opt.run_name}_BatchSize={config.opt.batch_size}_{datetime.datetime.now().strftime("%m%d-%H%M")}')
         self.generator = generator
         self.discriminator = discriminator
         self.optimizer_G = optimizer_G
