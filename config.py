@@ -7,8 +7,8 @@ class Config:
     def __init__(self):
         parser = argparse.ArgumentParser()
         # TODO: early stopping
-        parser.add_argument("--n_epochs", type=int, default=3)
-        parser.add_argument("--batch_size", type=int, default=10)
+        parser.add_argument("--n_epochs", type=int, default=10)
+        parser.add_argument("--batch_size", type=int, default=16)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")
         parser.add_argument("--dataset_name", type=str, default="street")
         parser.add_argument("--lr", type=float, default=9e-4)
@@ -20,7 +20,7 @@ class Config:
         parser.add_argument("--mask_size", type=int, default=128)
         parser.add_argument("--channels", type=int, default=3)
         parser.add_argument("--sample_interval", type=int, default=1000)
-        parser.add_argument("--run_name", type=str, default="ViT")
+        parser.add_argument("--run_name", type=str, default="CNN")
         parser.add_argument("--last_log", type=str, default=max((os.path.join("logs", f) for f in os.listdir("logs")) if os.path.exists("logs") and os.listdir("logs") else ["logs/default"], key=os.path.getmtime))
         # TODO: resume training with one argument
         parser.add_argument("--resume_num", type=str, default="latest")
@@ -37,4 +37,6 @@ class Config:
         self.opt = parser.parse_args()
         
         self.cuda = True if torch.cuda.is_available() else False
-        self.device = torch.device("cuda" if self.cuda else "cpu")
+        self.device_name = "cuda" if self.cuda else "cpu"
+        self.device = torch.device(self.device_name)
+        self.Tensor = torch.cuda.FloatTensor if self.cuda else torch.FloatTensor

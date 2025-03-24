@@ -15,11 +15,13 @@ class GANTrainer:
         self.adversarial_loss = nn.MSELoss()
         self.pixelwise_loss = nn.L1Loss()
         
-        (self.optimizer_G, self.optimizer_D,
-         self.scheduler_G, self.scheduler_D,
-         self.scheduler_G_plateau, self.scheduler_D_plateau) = create_optim(
+        (self.optimizer_G, self.optimizer_D) = create_optim(
             self.generator, self.discriminator, config
         )
+        #  self.scheduler_G, self.scheduler_D,
+        #  self.scheduler_G_plateau, self.scheduler_D_plateau) = create_optim(
+        #     self.generator, self.discriminator, config
+        # )
 
         if config.cuda:
             self.generator.cuda()
@@ -50,7 +52,7 @@ class GANTrainer:
         fake = torch.zeros(batch_size, 1, label_size, label_size).type(self.config.Tensor)
 
 
-        with autocast(device_type=self.onfig.device, dtype=torch.float16):
+        with autocast(device_type=self.config.device_name, dtype=torch.float16):
             gen_parts = self.generator(masked_imgs)
             g_adv = self.adversarial_loss(self.discriminator(gen_parts), valid)
             g_pixel = self.pixelwise_loss(gen_parts, masked_parts)
@@ -69,13 +71,13 @@ class GANTrainer:
         for param_group in self.optimizer_D.param_groups:
             param_group['lr'] = self.config.opt.lr
     
-        print(f"Epoch {epoch}/{self.config.opt.n_epochs} - 調整後的超參數:")
-        print(f"  學習率 (lr): {self.config.opt.lr}")
-        print(f"  最小學習率 (lr_min): {self.config.opt.lr_min}")
-        print(f"  最大學習率 (lr_max): {self.config.opt.lr_max}")
-        print(f"  步進大小上升 (step_size_up): {self.config.opt.step_size_up}")
-        print(f"  降低因子 (plateau_factor): {self.config.opt.plateau_factor}")
-        print(f"  降低耐心 (plateau_patience): {self.config.opt.plateau_patience}")
+        print(f"Epoch {epoch}/{self.config.opt.n_epochs}")
+        # print(f" 調整後的超參數: 學習率 (lr): {self.config.opt.lr}")
+        # print(f"  最小學習率 (lr_min): {self.config.opt.lr_min}")
+        # print(f"  最大學習率 (lr_max): {self.config.opt.lr_max}")
+        # print(f"  步進大小上升 (step_size_up): {self.config.opt.step_size_up}")
+        # print(f"  降低因子 (plateau_factor): {self.config.opt.plateau_factor}")
+        # print(f"  降低耐心 (plateau_patience): {self.config.opt.plateau_patience}")
         
         self.generator.train()
         self.discriminator.train()
@@ -115,14 +117,14 @@ class GANTrainer:
 
             global_step = epoch * len(self.dataloader) + i
             self.logger.log_training_progress(d_loss, g_adv, g_pixel, g_loss, global_step)
-            self.scheduler_G.step()
-            self.scheduler_D.step()
+            # self.scheduler_G.step()
+            # self.scheduler_D.step()
 
         # Validate after each epoch
-        val_loss = self.validate(global_step)
+        # val_loss = self.validate(global_step)
 
-        self.scheduler_G_plateau.step(val_loss)
-        self.scheduler_D_plateau.step(val_loss)
+        # self.scheduler_G_plateau.step(val_loss)
+        # self.scheduler_D_plateau.step(val_loss)
 
     def validate(self,global_step):
         self.generator.eval()
