@@ -6,6 +6,7 @@ checkpoints
 TODO.md
 plot_loss.py
 nohup.out
+archive
 
 
 *.json
