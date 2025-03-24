@@ -57,16 +57,6 @@ def main():
     sample_imgs = torch.cat((masked_imgs.cpu(), gen_parts.cpu(), imgs.cpu()), -2)
     img_grid = make_grid(sample_imgs, nrow=4, normalize=True)
 
-    # plt.figure(figsize=(12, 8))
-    # plt.imshow(img_grid.permute(1, 2, 0))
-    # plt.axis('off')
-    # plt.show()
-
-    # save_option = input("Do you want to save the generated images? (y/n): ")
-    # if save_option.lower() == 'y':
-    #     os.makedirs('inference_results', exist_ok=True)
-    #     save_image(img_grid, 'inference_results/generated.png')
-    #     print("Images saved to 'inference_results/generated.png'.")
     os.makedirs('inference_results', exist_ok=True)
     save_image(img_grid, 'inference_results/generated.png')
     print("Images saved to 'inference_results/generated.png'.")
