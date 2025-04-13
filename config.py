@@ -8,10 +8,10 @@ class Config:
         parser = argparse.ArgumentParser()
         # TODO: early stopping
         parser.add_argument("--n_epochs", type=int, default=10)
-        parser.add_argument("--batch_size", type=int, default=16)
+        parser.add_argument("--batch_size", type=int, default=8)
         # parser.add_argument("--dataset_name", type=str, default="img_align_celeba")
         parser.add_argument("--dataset_name", type=str, default="street")
-        parser.add_argument("--lr", type=float, default=9e-4)
+        parser.add_argument("--lr", type=float, default=9e-5)
         parser.add_argument("--b1", type=float, default=0.5, help="adam: decay of first order momentum of gradient")
         parser.add_argument("--b2", type=float, default=0.999, help="adam: decay of first order momentum of gradient")
         parser.add_argument("--n_cpu", type=int, default=24, help="number of cpu threads to use during batch generation")
@@ -24,6 +24,7 @@ class Config:
         parser.add_argument("--last_log", type=str, default=max((os.path.join("logs", f) for f in os.listdir("logs")) if os.path.exists("logs") and os.listdir("logs") else ["logs/default"], key=os.path.getmtime))
         # TODO: resume training with one argument
         parser.add_argument("--resume_num", type=str, default="latest")
+        parser.add_argument("--resume_start_epoch", type=int, default=2)
         parser.add_argument("--resume_start_num", type=int, default=0, help="Set to 0 if not resuming")
         parser.add_argument("--early_stopping", type=int, default=100)
 
