@@ -49,8 +49,8 @@ def main():
         gen_parts = generator(masked_imgs)
 
         center_part = masked_imgs.clone()
-        i = 32
-        center_mask = 128 // 2
+        i = 128 // 2
+        center_mask = 128
         gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
 
     print('Image generated successfully!')
