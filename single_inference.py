@@ -17,8 +17,8 @@ def main():
         generator = Generator().to(device)
         generator.eval()
 
-        state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
         state_dict = torch.load('./weights/CNN_DynamicLR/generator_latest.pth', map_location=device, weights_only=True)
+        state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
         state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
         generator.load_state_dict(state_dict)
         print("Model loaded successfully!")
@@ -38,17 +38,20 @@ def main():
     img_tensor = transforms_(img).unsqueeze(0).to(device)
     
     # Create masked version
-    masked_img = img_tensor.clone()
+    mask = torch.ones_like(img_tensor)
+    # masked_img = img_tensor.clone()
     i = 128 // 2
     center_mask = 128
-    masked_img[:, :, i:i+center_mask, i:i+center_mask] = 1  # White mask in center
+    mask[:, :, i:i+center_mask, i:i+center_mask] = 0  # make center 0
+    
+    masked_img = img_tensor * (1 - mask) + mask
 
     # Inference
     print('Generating images...')
     with torch.no_grad():
         gen_parts = generator(masked_img)
 
-        center_part = masked_img.clone()
+        center_part = img_tensor.clone()
         gen_parts[:, :, i:i+center_mask, i:i+center_mask] = center_part[:, :, i:i+center_mask, i:i+center_mask]
 
     print('Image generated successfully!')
