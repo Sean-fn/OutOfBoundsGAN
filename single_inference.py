@@ -33,7 +33,7 @@ def main():
     ])
 
     # Load single image
-    image_path = "inference_results/org.jpeg"  # Replace with your image path
+    image_path = "inference_results/org2.jpeg"  # Replace with your image path
     img = Image.open(image_path).convert('RGB')
     img_tensor = transforms_(img).unsqueeze(0).to(device)
     
@@ -56,10 +56,10 @@ def main():
 
     print('Image generated successfully!')
     sample_imgs = torch.cat((masked_img.cpu(), gen_parts.cpu(), img_tensor.cpu()), -2)
-    img_grid = make_grid(sample_imgs, nrow=3, normalize=True)
+    sample_imgs = (sample_imgs + 1) / 2 # Normalize to [0, 1]
 
     os.makedirs('inference_results', exist_ok=True)
-    save_image(img_grid, 'inference_results/generated.png')
+    save_image(sample_imgs, 'inference_results/generated.png')
     print("Images saved to 'inference_results/generated.png'.")
 
 if __name__ == "__main__":
