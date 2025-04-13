@@ -12,12 +12,12 @@ def load_weights(config, trainer):
     """
     resume_num = config.opt.resume_num
     if resume_num is not None:
-        generator_path = os.path.join('weights', f'generator_{resume_num}.pth')
-        discriminator_path = os.path.join('weights', f'discriminator_{resume_num}.pth')
+        generator_path = os.path.join('weights', config.opt.run_name, f'generator_{resume_num}.pth')
+        discriminator_path = os.path.join('weights', config.opt.run_name, f'discriminator_{resume_num}.pth')
 
         if os.path.exists(discriminator_path):
-            trainer.discriminator.load_state_dict(torch.load(discriminator_path))
-            trainer.generator.load_state_dict(torch.load(generator_path))
+            trainer.discriminator.load_state_dict(torch.load(discriminator_path, weights_only=False))
+            trainer.generator.load_state_dict(torch.load(generator_path, weights_only=False))
             print("**Loaded pre-trained weights**")
         else:
             resume_num = 0
