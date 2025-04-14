@@ -24,7 +24,7 @@ class Config:
         parser.add_argument("--last_log", type=str, default=max((os.path.join("logs", f) for f in os.listdir("logs")) if os.path.exists("logs") and os.listdir("logs") else ["logs/default"], key=os.path.getmtime))
         # TODO: resume training with one argument
         parser.add_argument("--resume_num", type=str, default="latest")
-        parser.add_argument("--resume_start_epoch", type=int, default=2)
+        parser.add_argument("--resume_start_epoch", type=int, default=0)
         parser.add_argument("--resume_start_num", type=int, default=0, help="Set to 0 if not resuming")
         parser.add_argument("--early_stopping", type=int, default=100)
 

@@ -15,7 +15,7 @@ def main():
     if config.opt.resume_start_num != 0:
         load_weights(config, trainer)
 
-    epoch = config.opt.resume_epoch
+    epoch = config.opt.resume_start_epoch
     while epoch < config.opt.n_epochs and not trainer.early_stopping:
         trainer.train(epoch)
         epoch += 1
