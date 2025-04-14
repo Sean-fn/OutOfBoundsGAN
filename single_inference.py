@@ -33,7 +33,7 @@ def main():
     ])
 
     # Load single image
-    image_path = "inference_results/org2.jpeg"  # Replace with your image path
+    image_path = "data/inference/org.jpeg"  # Replace with your image path
     img = Image.open(image_path).convert('RGB')
     img_tensor = transforms_(img).unsqueeze(0).to(device)
     
