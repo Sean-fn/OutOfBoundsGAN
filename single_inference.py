@@ -17,9 +17,9 @@ def main():
         generator = Generator().to(device)
         generator.eval()
 
-        state_dict = torch.load('./weights/CNN_DynamicLR/generator_latest.pth', map_location=device, weights_only=True)
+        # state_dict = torch.load('./weights/CNN_DynamicLR/generator_latest.pth', map_location=device, weights_only=True)
+        # state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
         state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
-        state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
         generator.load_state_dict(state_dict)
         print("Model loaded successfully!")
 
@@ -27,7 +27,7 @@ def main():
         print(f"Error loading model: {e}")
 
     transforms_ = transforms.Compose([
-        transforms.Resize((256, 256), Image.BICUBIC),
+        transforms.Resize((128, 128), Image.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
     ])
@@ -40,8 +40,8 @@ def main():
     # Create masked version
     mask = torch.ones_like(img_tensor)
     # masked_img = img_tensor.clone()
-    i = 128 // 2
-    center_mask = 128
+    i = 64 // 2
+    center_mask = 64
     mask[:, :, i:i+center_mask, i:i+center_mask] = 0  # make center 0
     
     masked_img = img_tensor * (1 - mask) + mask
