@@ -5,7 +5,8 @@ from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
-from models import Generator
+from deprecated_models import Generator
+from models import ViTGenerator, CNNGenerator
 from config import Config
 
 
@@ -18,8 +19,8 @@ def main():
         generator.eval()
 
         # state_dict = torch.load('./weights/CNN_DynamicLR/generator_latest.pth', map_location=device, weights_only=True)
-        # state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
-        state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
+        state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
+        # state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
         generator.load_state_dict(state_dict)
         print("Model loaded successfully!")
 
@@ -59,8 +60,8 @@ def main():
     sample_imgs = (sample_imgs + 1) / 2 # Normalize to [0, 1]
 
     os.makedirs('inference_results', exist_ok=True)
-    save_image(sample_imgs, 'inference_results/generated.png')
-    print("Images saved to 'inference_results/generated.png'.")
+    save_image(sample_imgs, 'inference_results/testing.png')
+    print("Images saved to 'inference_results/testing.png'.")
 
 if __name__ == "__main__":
     main()

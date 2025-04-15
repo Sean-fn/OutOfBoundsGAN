@@ -24,81 +24,83 @@ class VisionTransformerUpsample(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
-        x = self.conv(x) # upsample
+        x = self.conv(x)  # 上採樣
         b, c, h, w = x.size()
         x = rearrange(x, 'b c h w -> b (h w) c')
-        x = self.transformer(x, x)  # self attention
+        x = self.transformer(x, x)  # 自注意力機制
         x = rearrange(x, 'b (h w) c -> b c h w', h=h, w=w)
         x = self.relu(x)
         return x
 
-def make_downsample(in_feat, out_feat, normalize=True):
-    layers = [nn.Conv2d(in_feat, out_feat, 4, stride=2, padding=1)]
-    if normalize:
-        layers.append(nn.BatchNorm2d(out_feat, 0.8))
-    layers.append(nn.LeakyReLU(0.2))
-    return layers
-
-def make_upsample(in_feat, out_feat, normalize=True):
-    layers = [nn.ConvTranspose2d(in_feat, out_feat, 4, stride=2, padding=1)]
-    if normalize:
-        layers.append(nn.BatchNorm2d(out_feat, 0.8))
-    layers.append(nn.ReLU())
-    return layers
-
-class BaseGenerator(nn.Module):
+class Generator(nn.Module):
     def __init__(self, channels=3):
-        super().__init__()
-        self.encoder = nn.Sequential(
-            *make_downsample(channels, 64, normalize=False),
-            *make_downsample(64, 64),
-            *make_downsample(64, 128),
-            *make_downsample(128, 256),
-            *make_downsample(256, 512),
+        super(Generator, self).__init__()
+
+        def downsample(in_feat, out_feat, normalize=True):
+            layers = [nn.Conv2d(in_feat, out_feat, 4, stride=2, padding=1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.LeakyReLU(0.2))
+            return layers
+
+        self.model = nn.Sequential(
+            *downsample(channels, 64, normalize=False),
+            *downsample(64, 64),
+            *downsample(64, 128),
+            *downsample(128, 256),
+            *downsample(256, 512),
             nn.Conv2d(512, 4000, 1),
         )
-
-    def forward(self, x):
-        return self.encoder(x)
-
-class ViTGenerator(BaseGenerator):
-    def __init__(self, channels=3):
-        super().__init__(channels)
+        
         self.upsample_blocks = nn.ModuleList([
             VisionTransformerUpsample(4000, 256),
             VisionTransformerUpsample(256, 128, upsample_scale=4),
             VisionTransformerUpsample(128, 64, upsample_scale=4),
         ])
+        
         self.final_layers = nn.Sequential(
             nn.Conv2d(64, channels, 3, 1, 1),
             nn.Tanh()
         )
-
+# ViT use this forward
     def forward(self, x):
-        x = super().forward(x)
+        x = self.model(x)
         for block in self.upsample_blocks:
-            if is_grad_enabled():
+            if is_grad_enabled():  # Only use checkpointing during training
                 x = checkpoint(block, x, use_reentrant=True)
             else:
-                x = block(x)
+                x = block(x)  # Directly run without checkpointing in inference  #without checkpoint, it will cause OOM
         return self.final_layers(x)
 
-class CNNGenerator(BaseGenerator):
-    def __init__(self, channels=3):
-        super().__init__(channels)
-        self.decoder = nn.Sequential(
-            *make_upsample(4000, 512),
-            *make_upsample(512, 256),
-            *make_upsample(256, 128),
-            *make_upsample(128, 128),
-            *make_upsample(128, 64),
+
+        def upsample(in_feat, out_feat, normalize=True):
+            layers = [nn.ConvTranspose2d(in_feat, out_feat, 4, stride=2, padding=1)]
+            if normalize:
+                layers.append(nn.BatchNorm2d(out_feat, 0.8))
+            layers.append(nn.ReLU())
+            return layers
+
+        self.model = nn.Sequential(
+            *downsample(channels, 64, normalize=False),
+            *downsample(64, 64),
+            *downsample(64, 128),
+            *downsample(128, 256),
+            *downsample(256, 512),
+            nn.Conv2d(512, 4000, 1),
+            *upsample(4000, 512),
+            *upsample(512, 256),
+            *upsample(256, 128),
+            *upsample(128, 128),    # For face common this
+            *upsample(128, 64),
             nn.Conv2d(64, channels, 3, 1, 1),
             nn.Tanh()
         )
 
-    def forward(self, x):
-        x = super().forward(x)
-        return self.decoder(x)
+# CNN use this forward
+    # def forward(self, x):
+    #     return self.model(x)
+
+
 
 class Discriminator(nn.Module):
     def __init__(self, channels=3):

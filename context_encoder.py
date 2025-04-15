@@ -3,14 +3,14 @@ import torch.nn as nn
 from torch.amp import GradScaler, autocast
 
 from datasets import get_dataloader
-from models import Generator, Discriminator
+from models import ViTGenerator, CNNGenerator, Discriminator
 from utils import Logger, create_optim
 
 class GANTrainer:
     def __init__(self, config):
         self.config = config
         self.early_stopping = False
-        self.generator = Generator(channels=config.opt.channels)
+        self.generator = ViTGenerator(channels=config.opt.channels)
         self.discriminator = Discriminator(channels=config.opt.channels)
         self.adversarial_loss = nn.MSELoss()
         self.pixelwise_loss = nn.L1Loss()
