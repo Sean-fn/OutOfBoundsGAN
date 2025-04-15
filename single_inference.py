@@ -5,8 +5,8 @@ from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
 
-from deprecated_models import Generator
-from models import ViTGenerator, CNNGenerator
+from model.deprecated_models import Generator
+from model.models import ViTGenerator, CNNGenerator
 from config import Config
 
 
@@ -19,8 +19,8 @@ def main():
         generator.eval()
 
         # state_dict = torch.load('./weights/CNN_DynamicLR/generator_latest.pth', map_location=device, weights_only=True)
-        state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
-        # state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
+        # state_dict = torch.load('./weights/CNN/generator_latest.pth', map_location=device, weights_only=True)
+        state_dict = torch.load('./weights/ViT/generator_latest.pth', map_location=device, weights_only=True)
         generator.load_state_dict(state_dict)
         print("Model loaded successfully!")
 

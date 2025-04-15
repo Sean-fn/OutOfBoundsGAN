@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.amp import GradScaler, autocast
 
 from datasets import get_dataloader
-from models import ViTGenerator, CNNGenerator, Discriminator
+from model.models import ViTGenerator, CNNGenerator, Discriminator
 from utils import Logger, create_optim
 
 class GANTrainer:
